@@ -1,0 +1,46 @@
+# eazpire-brand-portal — Brand Owner portal (separate from creator-engine / partner)
+#
+# Deploy: npm run deploy:brand
+# Dev:    npm run dev:brand
+#
+# Secrets (wrangler secret put -c wrangler-brand.toml):
+#   RESEND_API_KEY, JWT_APP_SECRET (or BRAND_JWT_SECRET)
+#   Optional: BRAND_SECRETS_KEY, BRAND_SHOPIFY_CLIENT_ID, BRAND_SHOPIFY_CLIENT_SECRET
+
+name = "eazpire-brand-portal"
+main = "src/brand-worker.js"
+compatibility_date = "2025-01-15"
+compatibility_flags = [ "nodejs_compat" ]
+
+workers_dev = true
+
+[[routes]]
+pattern = "brand.eazpire.com/*"
+zone_name = "eazpire.com"
+
+[vars]
+BRAND_PORTAL_URL = "https://brand.eazpire.com"
+ACCOUNT_DELETION_FROM_EMAIL = "Eazpire <noreply@eazpire.com>"
+PUBLIC_FILE_BASE_URL = "https://creator-engine.eazpire.workers.dev"
+# Dev helper: return verify URL in auth-request when Resend is missing
+BRAND_DEV_RETURN_VERIFY_URL = "0"
+
+[[kv_namespaces]]
+binding = "JOBS"
+id = "46fe4f02bc6544c286ea28ac0b4d9e22"
+
+[[d1_databases]]
+binding = "BRAND_DB"
+database_name = "brand-db"
+database_id = "43852317-b5a2-442c-b323-b63b0e5d5e00"
+migrations_dir = "migrations-brand"
+
+[assets]
+binding = "BRAND_ASSETS"
+directory = "brand-static"
+# Worker must see ?op= API and /auth/* before static assets
+run_worker_first = true
+
+[[r2_buckets]]
+binding = "R2"
+bucket_name = "creator-uploads"

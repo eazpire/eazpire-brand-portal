@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Eazpire Brand Portal</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <style>[hidden]{display:none!important}</style>
+  <link rel="stylesheet" href="/shared/css/brand-ui.css" />
+</head>
+<body>
+  <div id="app-shell" class="app-root" hidden>
+    <aside class="sidebar">
+      <div class="brand-block">
+        <div class="logo-mark">EB</div>
+        <div>
+          <div class="brand-name">Eazpire Brands</div>
+          <div class="brand-sub">Brand Portal</div>
+        </div>
+      </div>
+      <nav id="brand-nav"></nav>
+    </aside>
+    <header class="topbar">
+      <button type="button" class="btn btn-ghost sidebar-toggle" id="sidebar-toggle" aria-label="Open menu">☰</button>
+      <h1 class="page-title" id="page-title">Overview</h1>
+      <div class="topbar-actions">
+        <div class="conn-pills" id="conn-pills"></div>
+        <button type="button" class="btn btn-ghost" id="btn-logout">Sign out</button>
+      </div>
+    </header>
+    <main class="main">
+      <section class="view active" data-route="/" id="view-overview"></section>
+      <section class="view" data-route="/brand" id="view-brand"></section>
+      <section class="view" data-route="/connections" id="view-connections"></section>
+      <section class="view" data-route="/products" id="view-products"></section>
+      <section class="view" data-route="/team" id="view-team"></section>
+      <section class="view" data-route="/orders" id="view-orders"></section>
+      <section class="view" data-route="/settings" id="view-settings"></section>
+    </main>
+  </div>
+
+  <div id="app-onboarding" class="brand-screen" hidden>
+    <div class="login-card">
+      <div class="logo-mark" style="margin-bottom:14px">EB</div>
+      <h1>Create your brand</h1>
+      <p class="stage-desc">Set a display name and URL handle. The handle is reserved for your future brand page on eazpire.</p>
+      <form id="onboarding-form" style="margin-top:18px">
+        <div class="field">
+          <label for="ob-name">Brand name</label>
+          <input class="input" id="ob-name" required maxlength="80" />
+        </div>
+        <div class="field">
+          <label for="ob-handle">Handle</label>
+          <input class="input" id="ob-handle" required pattern="[a-z0-9]+(?:-[a-z0-9]+)*" maxlength="48" placeholder="my-brand" />
+        </div>
+        <div class="field">
+          <label for="ob-tagline">Tagline (optional)</label>
+          <input class="input" id="ob-tagline" maxlength="120" />
+        </div>
+        <button class="btn btn-primary" type="submit" style="width:100%">Continue</button>
+      </form>
+      <p id="onboarding-message" class="stage-desc" style="margin-top:12px"></p>
+    </div>
+  </div>
+
+  <div id="app-login" class="brand-screen" hidden>
+    <div class="login-card" id="login-panel">
+      <div class="logo-mark" style="margin-bottom:14px">EB</div>
+      <h1>Brand sign in</h1>
+      <p class="stage-desc">Sign in with a magic link sent to your email. New brands can start immediately.</p>
+      <form id="login-form" style="margin-top:20px">
+        <div class="field">
+          <label for="login-email">Email</label>
+          <input class="input" id="login-email" type="email" required autocomplete="email" />
+        </div>
+        <button class="btn btn-primary" type="submit" style="width:100%">Send magic link</button>
+      </form>
+      <p id="login-message" class="stage-desc" style="margin-top:16px"></p>
+    </div>
+
+    <div id="login-waiting" class="login-card" hidden>
+      <h1>Check your email</h1>
+      <p class="stage-desc">We sent a sign-in link to <strong id="login-waiting-email"></strong>. Open it on any device — this page signs you in automatically.</p>
+      <p class="stage-desc" id="login-dev-link" hidden style="margin-top:12px;word-break:break-all"></p>
+      <button type="button" class="btn btn-secondary" id="btn-login-waiting-cancel" style="width:100%;margin-top:20px">Cancel</button>
+    </div>
+  </div>
+
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>
