@@ -20,7 +20,7 @@ import {
   renderMagicLinkConfirmPage,
   redirectWithHeaders,
   wantsJsonVerifyResponse,
-} from "../manufacturers/partnerAuthVerifyUi.js";
+} from "./brandAuthVerifyUi.js";
 
 const POLL_PREFIX = "brand_login_poll:";
 const POLL_HASH_PREFIX = "brand_login_poll_hash:";
@@ -305,7 +305,7 @@ export async function handleBrandAuthVerify(request, env) {
       lead: "Click below to open your brand workspace. This step stops email scanners from using your link before you do.",
       buttonLabel: "Continue to Brand Portal",
     });
-    return new Response(html.replace("#5b8cff", "#0f766e").replace("#4a7af0", "#0d9488"), {
+    return new Response(html, {
       status: 200,
       headers: {
         "content-type": "text/html; charset=utf-8",
