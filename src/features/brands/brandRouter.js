@@ -33,6 +33,7 @@ import {
   handleBrandTeamUpdate,
   handleBrandTeamRevoke,
 } from "./brandTeam.js";
+import { handleBrandPublicList, handleBrandPublicGet } from "./brandPublic.js";
 
 export async function handleBrandRouter(request, env) {
   const url = new URL(request.url);
@@ -42,6 +43,9 @@ export async function handleBrandRouter(request, env) {
   const cors = getCorsHeaders(request);
 
   try {
+    if (op === "brand-public-list") return handleBrandPublicList(request, env);
+    if (op === "brand-public-get") return handleBrandPublicGet(request, env);
+
     if (op === "brand-auth-request") return handleBrandAuthRequest(request, env);
     if (op === "brand-auth-poll") return handleBrandAuthPoll(request, env);
     if (op === "brand-auth-exchange") return handleBrandAuthExchange(request, env);
