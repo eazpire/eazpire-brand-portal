@@ -33,6 +33,7 @@ export function getCorsHeaders(request) {
     "https://wear.eazpire.com",
     "https://play.eazpire.com",
     "https://ads.eazpire.com",
+    "https://brand.eazpire.com",
     // Shopify-Store
     "https://allyoucanpink.myshopify.com",
   ];
