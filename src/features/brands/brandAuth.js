@@ -394,10 +394,20 @@ export async function handleBrandAuthMe(request, env) {
   await ensureBrandSchema(env);
 
   const user = await db
-    .prepare(`SELECT id, email, display_name, status FROM brand_users WHERE id = ?`)
+    .prepare(
+      `SELECT id, email, display_name, status, shopify_customer_id, shopify_linked_at
+       FROM brand_users WHERE id = ?`
+    )
     .bind(session.uid)
     .first();
   if (!user) return json({ ok: false, error: "unauthorized" }, 401, cors);
+
+  try {
+    const { activateBrandInvitesForUser } = await import("./creatorBrandWorkspace.js");
+    await activateBrandInvitesForUser(db, { userId: user.id, email: user.email });
+  } catch (e) {
+    console.warn("[brand-auth-me] activate invites", e?.message || e);
+  }
 
   const brand = await db
     .prepare(
@@ -410,7 +420,13 @@ export async function handleBrandAuthMe(request, env) {
   return json(
     {
       ok: true,
-      user: { id: user.id, email: user.email, display_name: user.display_name },
+      user: {
+        id: user.id,
+        email: user.email,
+        display_name: user.display_name,
+        shopify_customer_id: user.shopify_customer_id || null,
+        shopify_linked_at: user.shopify_linked_at || null,
+      },
       brand: brand || null,
       needs_onboarding: !brand,
     },

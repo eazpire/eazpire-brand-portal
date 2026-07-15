@@ -2,7 +2,12 @@
  * Serve brand.eazpire.com SPA + auth verify / Shopify OAuth callback paths
  */
 
-import { handleBrandAuthVerify, handleBrandShopifyOAuthCallback } from "./brandRouter.js";
+import {
+  handleBrandAuthVerify,
+  handleBrandShopifyOAuthCallback,
+  handleBrandCustomerOAuthStart,
+  handleBrandCustomerOAuthCallback,
+} from "./brandRouter.js";
 
 let BRAND_STATIC_BUNDLE = null;
 async function loadBundle() {
@@ -80,6 +85,12 @@ export async function handleBrandPortalRequest(request, env) {
   }
   if (url.pathname === "/auth/shopify/callback") {
     return handleBrandShopifyOAuthCallback(request, env);
+  }
+  if (url.pathname === "/auth/customer/start") {
+    return handleBrandCustomerOAuthStart(request, env);
+  }
+  if (url.pathname === "/auth/customer/callback") {
+    return handleBrandCustomerOAuthCallback(request, env);
   }
 
   const key = assetKeyForPath(url.pathname);

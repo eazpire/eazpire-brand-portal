@@ -307,7 +307,7 @@ async function renderProducts() {
         <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center">
           <div>
             <h2 style="margin:0">Products</h2>
-            <p class="muted" style="margin:6px 0 0">Synced from your Printify shop (read-only in phase 1).</p>
+            <p class="muted" style="margin:6px 0 0">Synced from your Printify shop. Dual-publish mirrors selected products onto eazpire.</p>
           </div>
           <div class="actions-row" style="margin:0">
             <select class="input" id="product-filter" style="width:auto">
@@ -315,12 +315,13 @@ async function renderProducts() {
               <option value="active" ${status === "active" ? "selected" : ""}>Active</option>
               <option value="draft" ${status === "draft" ? "selected" : ""}>Draft</option>
             </select>
-            <button class="btn btn-primary" id="btn-sync-products">Refresh sync</button>
+            <button class="btn" id="btn-sync-products">Refresh sync</button>
+            <button class="btn btn-primary" id="btn-dual-publish">Publish to eazpire</button>
           </div>
         </div>
         <div class="table-wrap" style="margin-top:16px">
           <table class="data">
-            <thead><tr><th></th><th>Title</th><th>Status</th><th>Printify</th><th>Shopify</th><th>Synced</th></tr></thead>
+            <thead><tr><th></th><th>Title</th><th>Status</th><th>Printify</th><th>Brand Shopify</th><th>eazpire</th><th>Synced</th></tr></thead>
             <tbody>
               ${
                 products.length
@@ -332,11 +333,18 @@ async function renderProducts() {
                   <td><span class="badge ${statusBadge(p.status)}">${escapeHtml(p.status || "—")}</span></td>
                   <td>${escapeHtml(p.printify_product_id || "—")}</td>
                   <td>${escapeHtml(p.shopify_product_id || "—")}</td>
+                  <td>${
+                    p.dual_publish_status === "published"
+                      ? `<span class="badge ok">${escapeHtml(p.eazpire_handle || p.eazpire_shopify_product_id || "published")}</span>`
+                      : p.dual_publish_status === "error"
+                        ? `<span class="badge warn" title="${escapeAttr(p.dual_publish_error || "")}">error</span>`
+                        : `<span class="muted">—</span>`
+                  }</td>
                   <td>${p.last_synced_at ? new Date(p.last_synced_at).toLocaleString() : "—"}</td>
                 </tr>`
                       )
                       .join("")
-                  : `<tr><td colspan="6" class="muted">No products yet. Connect Printify and run Refresh sync.</td></tr>`
+                  : `<tr><td colspan="7" class="muted">No products yet. Connect Printify and run Refresh sync.</td></tr>`
               }
             </tbody>
           </table>
@@ -346,6 +354,15 @@ async function renderProducts() {
       try {
         const res = await brandFetch("brand-products-sync", { method: "POST", body: {} });
         showToast(`Synced ${res.synced || 0} products`);
+        renderProducts();
+      } catch (err) {
+        showToast(err.message, { error: true });
+      }
+    });
+    $("btn-dual-publish").addEventListener("click", async () => {
+      try {
+        const res = await brandFetch("brand-dual-publish", { method: "POST", body: { limit: 20 } });
+        showToast(`Published ${res.published || 0} products to eazpire`);
         renderProducts();
       } catch (err) {
         showToast(err.message, { error: true });
@@ -370,7 +387,7 @@ async function renderTeam() {
     root.innerHTML = `
       <div class="panel">
         <h2>Invite creators</h2>
-        <p class="muted">Only invited users can develop products for your brand. Creator workspace under brand launches later. Designs created under a brand belong to the brand.</p>
+        <p class="muted">Only invited users can develop products for your brand. Invited creators link their eazpire Account, then switch to your brand workspace in Creator Settings.</p>
         <form id="invite-form" class="actions-row" style="align-items:flex-end">
           <div class="field" style="flex:1;min-width:200px;margin:0">
             <label>Email</label>
@@ -469,6 +486,8 @@ function renderOrders() {
 
 function renderSettings() {
   const email = me?.user?.email || "";
+  const linkedId = me?.user?.shopify_customer_id || "";
+  const linkedAt = me?.user?.shopify_linked_at;
   $("view-settings").innerHTML = `
     <div class="panel">
       <h2>Account</h2>
@@ -478,15 +497,87 @@ function renderSettings() {
       </div>
     </div>
     <div class="panel">
-      <h2>Link Shopify customer account</h2>
-      <p class="muted">Coming soon — optional link for design access via Creator later.</p>
-      <button class="btn" disabled>Coming soon</button>
+      <h2>Link eazpire Account</h2>
+      <p class="muted">Connect your eazpire shop login so Creator can use brand workspaces. This is not your brand Shopify shop (see Connections).</p>
+      ${
+        linkedId
+          ? `<p>Linked eazpire account ID: <code>${escapeHtml(linkedId)}</code>${
+              linkedAt ? ` · ${escapeHtml(new Date(linkedAt).toLocaleString())}` : ""
+            }</p>
+             <div class="actions-row">
+               <button class="btn" id="btn-relink-customer">Re-link eazpire Account</button>
+               <button class="btn" id="btn-unlink-customer">Unlink</button>
+             </div>`
+          : `<div class="actions-row">
+               <a class="btn btn-primary" href="/auth/customer/start">Link eazpire Account</a>
+             </div>`
+      }
+    </div>
+    <div class="panel">
+      <h2>Creator invites</h2>
+      <p class="muted">If you were invited to another brand, accept here so Creator can see that workspace after you link your eazpire Account.</p>
+      <button class="btn" id="btn-accept-invites">Accept pending invites</button>
+      <div id="membership-list" class="muted" style="margin-top:12px"></div>
     </div>
     <div class="panel">
       <h2>Danger zone</h2>
       <p class="muted">Soft-delete for brands will be available in a later release. Contact support if you need to remove a brand now.</p>
     </div>`;
   $("btn-settings-logout")?.addEventListener("click", () => $("btn-logout")?.click());
+  $("btn-relink-customer")?.addEventListener("click", () => {
+    location.href = "/auth/customer/start";
+  });
+  $("btn-unlink-customer")?.addEventListener("click", async () => {
+    try {
+      await brandFetch("brand-customer-unlink", { method: "POST", body: {} });
+      showToast("eazpire Account unlinked");
+      me = await brandFetch("brand-auth-me");
+      renderSettings();
+    } catch (err) {
+      showToast(err.message, { error: true });
+    }
+  });
+  $("btn-accept-invites")?.addEventListener("click", async () => {
+    try {
+      const res = await brandFetch("brand-accept-invite", { method: "POST", body: {} });
+      showToast(`Activated ${res.activated || 0} invite(s)`);
+      loadMemberships();
+    } catch (err) {
+      showToast(err.message, { error: true });
+    }
+  });
+  loadMemberships();
+
+  const params = new URLSearchParams(location.search);
+  if (params.get("customer_linked") === "1") {
+    showToast("eazpire Account linked");
+    history.replaceState({}, "", "/settings");
+  }
+  if (params.get("customer_link_error")) {
+    showToast(`Link failed: ${params.get("customer_link_error")}`, { error: true });
+    history.replaceState({}, "", "/settings");
+  }
+}
+
+async function loadMemberships() {
+  const box = $("membership-list");
+  if (!box) return;
+  try {
+    const data = await brandFetch("brand-my-memberships");
+    const list = data.memberships || [];
+    if (!list.length) {
+      box.textContent = "No brand memberships for this email.";
+      return;
+    }
+    box.innerHTML = `<ul style="margin:0;padding-left:18px">${list
+      .map(
+        (m) =>
+          `<li>${escapeHtml(m.name || m.handle)} · ${escapeHtml(m.status)} · ${escapeHtml(m.publish_mode)}</li>`
+      )
+      .join("")}</ul>`;
+  } catch (e) {
+    box.textContent = e.message;
+  }
 }
 
 async function onRoute(route) {

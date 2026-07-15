@@ -41,7 +41,8 @@ export async function handleBrandProductsList(request, env) {
   const url = new URL(request.url);
   const statusFilter = String(url.searchParams.get("status") || "").trim().toLowerCase();
 
-  let sql = `SELECT id, printify_product_id, shopify_product_id, title, status, thumbnail_url, last_synced_at, updated_at
+  let sql = `SELECT id, printify_product_id, shopify_product_id, title, status, thumbnail_url, last_synced_at, updated_at,
+                    eazpire_shopify_product_id, eazpire_handle, dual_publish_status, dual_publish_error, dual_published_at
              FROM brand_products WHERE brand_id = ?`;
   const binds = [brand.id];
   if (statusFilter === "active" || statusFilter === "draft") {

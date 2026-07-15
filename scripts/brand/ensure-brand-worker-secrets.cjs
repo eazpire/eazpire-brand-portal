@@ -8,7 +8,16 @@ const fs = require("fs");
 const path = require("path");
 
 const ROOT = path.resolve(__dirname, "../..");
-const SECRETS = ["JWT_APP_SECRET", "RESEND_API_KEY", "BRAND_SECRETS_KEY", "BRAND_JWT_SECRET"];
+const SECRETS = [
+  "JWT_APP_SECRET",
+  "RESEND_API_KEY",
+  "BRAND_SECRETS_KEY",
+  "BRAND_JWT_SECRET",
+  // Dual-publish onto eazpire Shopify store
+  "SHOPIFY_ACCESS_TOKEN",
+  // Link eazpire Account (Customer Account OAuth client; optional if using default/var)
+  "SHOPIFY_CUSTOMER_CLIENT_ID",
+];
 
 function loadDevVars() {
   const p = path.join(ROOT, ".dev.vars");

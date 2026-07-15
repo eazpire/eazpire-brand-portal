@@ -71,9 +71,12 @@ wrangler secret put JWT_APP_SECRET -c wrangler-brand.toml
 # optional dedicated keys:
 wrangler secret put BRAND_JWT_SECRET -c wrangler-brand.toml
 wrangler secret put BRAND_SECRETS_KEY -c wrangler-brand.toml
-# optional Shopify OAuth for brands:
+# optional BYO Shopify OAuth for brands' own shops:
 wrangler secret put BRAND_SHOPIFY_CLIENT_ID -c wrangler-brand.toml
 wrangler secret put BRAND_SHOPIFY_CLIENT_SECRET -c wrangler-brand.toml
+# dual-publish to eazpire store + Link eazpire Account:
+wrangler secret put SHOPIFY_ACCESS_TOKEN -c wrangler-brand.toml
+# optional: SHOPIFY_CUSTOMER_CLIENT_ID (defaults exist in code)
 ```
 
 ### Vars
@@ -81,6 +84,8 @@ wrangler secret put BRAND_SHOPIFY_CLIENT_SECRET -c wrangler-brand.toml
 - `BRAND_PORTAL_URL` — `https://brand.eazpire.com`
 - `BRAND_DEV_RETURN_VERIFY_URL` — set `1` only in local/dev to return magic-link URL when Resend is missing
 - `PUBLIC_FILE_BASE_URL` — for logo URLs
+- `CREATOR_ENGINE_URL` — token exchange for **Link eazpire Account**
+- `SHOPIFY_SHOP` / `SHOPIFY_SHOP_ID` — platform shop for dual-publish + Customer Account OAuth
 
 ### Apply migrations
 
@@ -93,6 +98,8 @@ node scripts/utils/wrangler-with-local-env.cjs d1 migrations apply brand-db --re
 Magic link via Resend (`brand-auth-request` → `/auth/verify` → cookie `brand_session`).
 
 Open signup: first magic-link request creates a `brand_users` row; onboarding creates the brand.
+
+**Link eazpire Account** (Settings): Customer Account OAuth (`/auth/customer/start` → callback) stores `shopify_customer_id` on `brand_users` for Creator brand workspaces. This is **not** the BYO Shopify shop under Connections.
 
 ## Connections (BYO)
 

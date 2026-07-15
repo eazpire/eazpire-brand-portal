@@ -34,6 +34,16 @@ import {
   handleBrandTeamRevoke,
 } from "./brandTeam.js";
 import { handleBrandPublicList, handleBrandPublicGet } from "./brandPublic.js";
+import { handleBrandDualPublish } from "./brandDualPublish.js";
+import {
+  handleBrandCustomerOAuthStart,
+  handleBrandCustomerOAuthCallback,
+  handleBrandCustomerUnlink,
+} from "./brandCustomerOAuth.js";
+import {
+  handleBrandMyMemberships,
+  handleBrandAcceptInvite,
+} from "./creatorBrandWorkspace.js";
 
 export async function handleBrandRouter(request, env) {
   const url = new URL(request.url);
@@ -67,11 +77,16 @@ export async function handleBrandRouter(request, env) {
 
     if (op === "brand-products") return handleBrandProductsList(request, env);
     if (op === "brand-products-sync") return handleBrandProductsSync(request, env);
+    if (op === "brand-dual-publish") return handleBrandDualPublish(request, env);
 
     if (op === "brand-team") return handleBrandTeamList(request, env);
     if (op === "brand-team-invite") return handleBrandTeamInvite(request, env);
     if (op === "brand-team-update") return handleBrandTeamUpdate(request, env);
     if (op === "brand-team-revoke") return handleBrandTeamRevoke(request, env);
+    if (op === "brand-my-memberships") return handleBrandMyMemberships(request, env);
+    if (op === "brand-accept-invite") return handleBrandAcceptInvite(request, env);
+
+    if (op === "brand-customer-unlink") return handleBrandCustomerUnlink(request, env);
 
     if (op === "brand-ping") {
       return json({ ok: true, service: "brand-portal", ts: Date.now() }, 200, cors);
@@ -84,4 +99,9 @@ export async function handleBrandRouter(request, env) {
   }
 }
 
-export { handleBrandAuthVerify, handleBrandShopifyOAuthCallback };
+export {
+  handleBrandAuthVerify,
+  handleBrandShopifyOAuthCallback,
+  handleBrandCustomerOAuthStart,
+  handleBrandCustomerOAuthCallback,
+};

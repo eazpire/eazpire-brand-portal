@@ -6,6 +6,8 @@
 # Secrets (wrangler secret put -c wrangler-brand.toml):
 #   RESEND_API_KEY, JWT_APP_SECRET (or BRAND_JWT_SECRET)
 #   Optional: BRAND_SECRETS_KEY, BRAND_SHOPIFY_CLIENT_ID, BRAND_SHOPIFY_CLIENT_SECRET
+#   Dual-publish to eazpire store: SHOPIFY_ACCESS_TOKEN (platform Admin API)
+#   eazpire Account link (Customer Account OAuth): SHOPIFY_CUSTOMER_CLIENT_ID, SHOPIFY_SHOP_ID (vars ok)
 
 name = "eazpire-brand-portal"
 main = "src/brand-worker.js"
@@ -22,6 +24,9 @@ zone_name = "eazpire.com"
 BRAND_PORTAL_URL = "https://brand.eazpire.com"
 ACCOUNT_DELETION_FROM_EMAIL = "Eazpire <noreply@eazpire.com>"
 PUBLIC_FILE_BASE_URL = "https://creator-engine.eazpire.workers.dev"
+CREATOR_ENGINE_URL = "https://creator-engine.eazpire.workers.dev"
+SHOPIFY_SHOP = "allyoucanpink.myshopify.com"
+SHOPIFY_SHOP_ID = "73952035098"
 # Dev helper: return verify URL in auth-request when Resend is missing
 BRAND_DEV_RETURN_VERIFY_URL = "0"
 
