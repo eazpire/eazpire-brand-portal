@@ -34,7 +34,7 @@ import {
   handleBrandTeamRevoke,
 } from "./brandTeam.js";
 import { handleBrandPublicList, handleBrandPublicGet } from "./brandPublic.js";
-import { handleBrandDualPublish } from "./brandDualPublish.js";
+import { handleBrandDualPublish, handleBrandDualUnpublish } from "./brandDualPublish.js";
 import {
   handleBrandCustomerOAuthStart,
   handleBrandCustomerOAuthCallback,
@@ -75,9 +75,24 @@ export async function handleBrandRouter(request, env) {
     if (op === "brand-connection-ping") return handleBrandConnectionPing(request, env);
     if (op === "brand-connection-disconnect") return handleBrandConnectionDisconnect(request, env);
 
-    if (op === "brand-products") return handleBrandProductsList(request, env);
+    // Product catalog + dual-publish onto eazpire (aliases for clear Brand API naming)
+    if (op === "brand-products" || op === "brand-api-products") return handleBrandProductsList(request, env);
     if (op === "brand-products-sync") return handleBrandProductsSync(request, env);
-    if (op === "brand-dual-publish") return handleBrandDualPublish(request, env);
+    if (
+      op === "brand-dual-publish" ||
+      op === "brand-products-publish" ||
+      op === "brand-api-publish"
+    ) {
+      return handleBrandDualPublish(request, env);
+    }
+    if (
+      op === "brand-dual-unpublish" ||
+      op === "brand-products-unpublish" ||
+      op === "brand-api-unpublish"
+    ) {
+      return handleBrandDualUnpublish(request, env);
+    }
+    if (op === "brand-api-overview") return handleBrandOverview(request, env);
 
     if (op === "brand-team") return handleBrandTeamList(request, env);
     if (op === "brand-team-invite") return handleBrandTeamInvite(request, env);

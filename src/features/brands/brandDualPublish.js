@@ -1,6 +1,6 @@
 /**
  * Mirror brand catalog products onto the eazpire Shopify store (platform credentials).
- * Tags: brand, eaz-brand:{handle} — metafield custom.brand_handle when accepted.
+ * Tags: brand, eaz-brand:{handle} — metafields custom.brand_handle / custom.brand_name.
  */
 
 import { json, getCorsHeaders } from "../../utils/response.js";
@@ -23,6 +23,14 @@ function slugify(s) {
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "")
     .slice(0, 60);
+}
+
+function escapeHtml(s) {
+  return String(s || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 async function upsertEazpireListing(env, { brand, product }) {
@@ -130,36 +138,53 @@ async function setBrandMetafields(env, shop, productId, brand) {
   }
 }
 
-function escapeHtml(s) {
-  return String(s || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+/**
+ * Draft (hide) an eazpire listing. Clears dual-publish status in D1.
+ * Does not delete the Shopify product (safer for ops / recovery).
+ */
+async function draftEazpireListing(env, product) {
+  const shop = shopDomain(env);
+  const pid = String(product.eazpire_shopify_product_id || "").trim();
+  if (!pid) return { skipped: true, reason: "no_eazpire_id" };
+  if (!env.SHOPIFY_ACCESS_TOKEN) {
+    throw new Error("shopify_access_token_missing");
+  }
+
+  await shopifyAPI(env, shop, `products/${pid}.json`, {
+    method: "PUT",
+    body: JSON.stringify({
+      product: {
+        id: Number(pid),
+        status: "draft",
+      },
+    }),
+  });
+  return { shopify_product_id: pid, status: "draft" };
 }
 
-export async function handleBrandDualPublish(request, env) {
-  const cors = getCorsHeaders(request);
-  if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405, cors);
-  const session = await requireBrandSession(request, env);
-  if (!session) return json({ ok: false, error: "unauthorized" }, 401, cors);
-
-  const db = getBrandDb(env);
-  if (!db) return json(brandDbUnavailable(), 503, cors);
-  await ensureBrandSchema(env);
-
-  const brand = await getOwnedBrand(db, session.uid);
-  if (!brand) return json({ ok: false, error: "brand_required" }, 400, cors);
-
-  const body = await request.json().catch(() => ({}));
-  const productId = String(body.product_id || "").trim();
-  const limit = Math.min(Math.max(Number(body.limit || 20) || 20, 1), 50);
+/**
+ * Core publish helper — usable by brand session API and admin force ops.
+ * @param {{ productIds?: string[], limit?: number }} opts
+ */
+export async function publishBrandProductsToEazpire(env, db, brand, opts = {}) {
+  const productIds = Array.isArray(opts.productIds)
+    ? opts.productIds.map((id) => String(id).trim()).filter(Boolean)
+    : [];
+  const limit = Math.min(Math.max(Number(opts.limit || 20) || 20, 1), 50);
 
   let rows;
-  if (productId) {
+  if (productIds.length === 1) {
     rows = await db
       .prepare(`SELECT * FROM brand_products WHERE brand_id = ? AND id = ?`)
-      .bind(brand.id, productId)
+      .bind(brand.id, productIds[0])
+      .all();
+  } else if (productIds.length > 1) {
+    const placeholders = productIds.map(() => "?").join(",");
+    rows = await db
+      .prepare(
+        `SELECT * FROM brand_products WHERE brand_id = ? AND id IN (${placeholders}) ORDER BY updated_at DESC LIMIT ?`
+      )
+      .bind(brand.id, ...productIds, limit)
       .all();
   } else {
     rows = await db
@@ -174,7 +199,7 @@ export async function handleBrandDualPublish(request, env) {
 
   const products = rows?.results || [];
   if (!products.length) {
-    return json({ ok: true, published: 0, message: "nothing_to_publish" }, 200, cors);
+    return { published: 0, results: [], message: "nothing_to_publish" };
   }
 
   const results = [];
@@ -206,8 +231,151 @@ export async function handleBrandDualPublish(request, env) {
     }
   }
 
-  const published = results.filter((r) => r.ok).length;
-  return json({ ok: true, published, results }, 200, cors);
+  return {
+    published: results.filter((r) => r.ok).length,
+    results,
+  };
 }
 
-export { slugify };
+/**
+ * Core unpublish helper — drafts eazpire listings and clears dual-publish status.
+ * @param {{ productIds?: string[], all?: boolean }} opts
+ */
+export async function unpublishBrandProductsFromEazpire(env, db, brand, opts = {}) {
+  const productIds = Array.isArray(opts.productIds)
+    ? opts.productIds.map((id) => String(id).trim()).filter(Boolean)
+    : [];
+  const all = opts.all === true;
+
+  let rows;
+  if (productIds.length) {
+    const placeholders = productIds.map(() => "?").join(",");
+    rows = await db
+      .prepare(
+        `SELECT * FROM brand_products
+         WHERE brand_id = ? AND id IN (${placeholders})
+           AND eazpire_shopify_product_id IS NOT NULL AND eazpire_shopify_product_id != ''`
+      )
+      .bind(brand.id, ...productIds)
+      .all();
+  } else if (all) {
+    rows = await db
+      .prepare(
+        `SELECT * FROM brand_products
+         WHERE brand_id = ?
+           AND eazpire_shopify_product_id IS NOT NULL AND eazpire_shopify_product_id != ''
+         ORDER BY updated_at DESC LIMIT 200`
+      )
+      .bind(brand.id)
+      .all();
+  } else {
+    return { unpublished: 0, results: [], message: "product_ids_or_all_required" };
+  }
+
+  const products = rows?.results || [];
+  if (!products.length) {
+    return { unpublished: 0, results: [], message: "nothing_to_unpublish" };
+  }
+
+  const results = [];
+  for (const product of products) {
+    const now = Date.now();
+    try {
+      const out = await draftEazpireListing(env, product);
+      await db
+        .prepare(
+          `UPDATE brand_products
+           SET dual_publish_status = 'unpublished', dual_publish_error = NULL,
+               dual_published_at = NULL, updated_at = ?
+           WHERE id = ?`
+        )
+        .bind(now, product.id)
+        .run();
+      results.push({ id: product.id, ok: true, ...out });
+    } catch (e) {
+      const msg = String(e?.message || e).slice(0, 400);
+      await db
+        .prepare(
+          `UPDATE brand_products
+           SET dual_publish_status = 'error', dual_publish_error = ?, updated_at = ?
+           WHERE id = ?`
+        )
+        .bind(msg, now, product.id)
+        .run();
+      results.push({ id: product.id, ok: false, error: msg });
+    }
+  }
+
+  return {
+    unpublished: results.filter((r) => r.ok).length,
+    results,
+  };
+}
+
+async function resolveSessionBrand(request, env) {
+  const cors = getCorsHeaders(request);
+  const session = await requireBrandSession(request, env);
+  if (!session) return { error: json({ ok: false, error: "unauthorized" }, 401, cors) };
+
+  const db = getBrandDb(env);
+  if (!db) return { error: json(brandDbUnavailable(), 503, cors) };
+  await ensureBrandSchema(env);
+
+  const brand = await getOwnedBrand(db, session.uid);
+  if (!brand) return { error: json({ ok: false, error: "brand_required" }, 400, cors) };
+  if (brand.status === "suspended") {
+    return { error: json({ ok: false, error: "brand_suspended" }, 403, cors) };
+  }
+
+  return { cors, db, brand };
+}
+
+/** POST ?op=brand-dual-publish | brand-products-publish | brand-api-publish */
+export async function handleBrandDualPublish(request, env) {
+  const cors = getCorsHeaders(request);
+  if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405, cors);
+
+  const resolved = await resolveSessionBrand(request, env);
+  if (resolved.error) return resolved.error;
+  const { db, brand } = resolved;
+
+  const body = await request.json().catch(() => ({}));
+  const productId = String(body.product_id || "").trim();
+  const productIds = Array.isArray(body.product_ids)
+    ? body.product_ids.map((id) => String(id).trim()).filter(Boolean)
+    : productId
+      ? [productId]
+      : [];
+  const limit = Math.min(Math.max(Number(body.limit || 20) || 20, 1), 50);
+
+  const out = await publishBrandProductsToEazpire(env, db, brand, { productIds, limit });
+  return json({ ok: true, ...out }, 200, cors);
+}
+
+/** POST ?op=brand-products-unpublish | brand-api-unpublish | brand-dual-unpublish */
+export async function handleBrandDualUnpublish(request, env) {
+  const cors = getCorsHeaders(request);
+  if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405, cors);
+
+  const resolved = await resolveSessionBrand(request, env);
+  if (resolved.error) return resolved.error;
+  const { db, brand } = resolved;
+
+  const body = await request.json().catch(() => ({}));
+  const productId = String(body.product_id || "").trim();
+  const productIds = Array.isArray(body.product_ids)
+    ? body.product_ids.map((id) => String(id).trim()).filter(Boolean)
+    : productId
+      ? [productId]
+      : [];
+  const all = body.all === true;
+
+  if (!productIds.length && !all) {
+    return json({ ok: false, error: "product_ids_or_all_required" }, 400, cors);
+  }
+
+  const out = await unpublishBrandProductsFromEazpire(env, db, brand, { productIds, all });
+  return json({ ok: true, ...out }, 200, cors);
+}
+
+export { slugify, upsertEazpireListing, draftEazpireListing };

@@ -110,6 +110,11 @@ export async function ensureBrandSchema(env) {
       brand_id TEXT NOT NULL,
       updated_at INTEGER NOT NULL
     )`,
+    // Phase 3: admin suspend metadata
+    `ALTER TABLE brands ADD COLUMN suspend_reason TEXT`,
+    `ALTER TABLE brands ADD COLUMN suspended_at INTEGER`,
+    `ALTER TABLE brands ADD COLUMN suspended_by TEXT`,
+    `CREATE INDEX IF NOT EXISTS idx_brands_status ON brands(status)`,
   ];
 
   for (const sql of stmts) {
