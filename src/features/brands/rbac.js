@@ -26,6 +26,7 @@ export const BRAND_API_SCOPES = {
   TEAM_WRITE: "team:write",
   WEBHOOKS_READ: "webhooks:read",
   WEBHOOKS_WRITE: "webhooks:write",
+  ORDERS_READ: "orders:read",
 };
 
 /** Default scopes for newly created keys (everything except `*`). */

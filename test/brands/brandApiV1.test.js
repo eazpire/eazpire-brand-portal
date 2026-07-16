@@ -62,6 +62,14 @@ describe("rewriteBrandApiV1Request", () => {
     );
     expect(new URL(revoke.url).searchParams.get("op")).toBe("brand-api-webhooks-revoke");
   });
+  it("maps orders list and detail", () => {
+    const list = rewriteBrandApiV1Request(new Request("https://brand.eazpire.com/api/v1/orders"));
+    expect(new URL(list.url).searchParams.get("op")).toBe("brand-api-orders");
+
+    const get = rewriteBrandApiV1Request(new Request("https://brand.eazpire.com/api/v1/orders/5678"));
+    expect(new URL(get.url).searchParams.get("op")).toBe("brand-api-order-get");
+    expect(new URL(get.url).searchParams.get("order_id")).toBe("5678");
+  });
 });
 
 describe("brand API scopes", () => {
@@ -71,6 +79,7 @@ describe("brand API scopes", () => {
     expect(DEFAULT_BRAND_API_SCOPES).toContain(BRAND_API_SCOPES.CONNECTIONS_READ);
     expect(DEFAULT_BRAND_API_SCOPES).toContain(BRAND_API_SCOPES.WEBHOOKS_READ);
     expect(DEFAULT_BRAND_API_SCOPES).toContain(BRAND_API_SCOPES.WEBHOOKS_WRITE);
+    expect(DEFAULT_BRAND_API_SCOPES).toContain(BRAND_API_SCOPES.ORDERS_READ);
   });
 
   it("authHasScope respects wildcard and session", () => {

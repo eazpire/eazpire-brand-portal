@@ -501,11 +501,180 @@ async function renderTeam() {
 }
 
 function renderOrders() {
-  $("view-orders").innerHTML = `
-    <div class="panel">
-      <h2>Orders</h2>
-      <p class="muted">Coming soon — order sync will appear once fulfillment is connected for your brand shop.</p>
-    </div>`;
+  const root = $("view-orders");
+  root.innerHTML = `<div class="panel"><p class="muted">Loading…</p></div>`;
+  loadOrders(root);
+}
+
+async function loadOrders(root) {
+  try {
+    const data = await brandFetch("brand-api-orders", { query: { limit: 25 } });
+    const orders = data.orders || [];
+    const dualCount = data.dual_published_product_count ?? 0;
+    let emptyMsg = "No orders yet for your dual-published products.";
+    if (!dualCount) {
+      emptyMsg =
+        "No dual-published products on eazpire yet. Publish products under Products to see related sales here.";
+    } else if (data.message) {
+      emptyMsg = data.message;
+    }
+
+    root.innerHTML = `
+      <div class="panel">
+        <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center">
+          <div>
+            <h2 style="margin:0">Orders</h2>
+            <p class="muted" style="margin:6px 0 0">
+              Read-only sales of your products listed on eazpire (not orders from your own BYO Shopify shop).
+              ${dualCount ? ` · ${dualCount} dual-published product${dualCount === 1 ? "" : "s"}` : ""}
+            </p>
+          </div>
+          <button class="btn" type="button" id="btn-orders-refresh">Refresh</button>
+        </div>
+        <div class="table-wrap" style="margin-top:16px">
+          <table class="data">
+            <thead>
+              <tr>
+                <th>Order</th>
+                <th>Date</th>
+                <th>Payment</th>
+                <th>Fulfillment</th>
+                <th>Items</th>
+                <th>Brand subtotal</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              ${
+                orders.length
+                  ? orders
+                      .map(
+                        (o) => `<tr data-order-id="${escapeAttr(o.id)}" class="order-row" style="cursor:pointer">
+                  <td>${escapeHtml(o.name || o.id)}</td>
+                  <td>${o.created_at ? escapeHtml(new Date(o.created_at).toLocaleString()) : "—"}</td>
+                  <td><span class="badge ${statusBadge(o.financial_status)}">${escapeHtml(o.financial_status || "—")}</span></td>
+                  <td><span class="badge ${statusBadge(o.fulfillment_status)}">${escapeHtml(o.fulfillment_status || "unfulfilled")}</span></td>
+                  <td>${escapeHtml(String(o.brand_line_item_count ?? o.line_items?.length ?? "—"))}</td>
+                  <td>${escapeHtml(
+                    o.brand_subtotal != null
+                      ? `${o.brand_subtotal} ${o.currency || ""}`.trim()
+                      : "—"
+                  )}</td>
+                  <td><button type="button" class="btn btn-order-detail" data-order-id="${escapeAttr(o.id)}">Details</button></td>
+                </tr>`
+                      )
+                      .join("")
+                  : `<tr><td colspan="7" class="muted">${escapeHtml(emptyMsg)}</td></tr>`
+              }
+            </tbody>
+          </table>
+        </div>
+        <div id="order-detail-panel" hidden class="panel" style="margin-top:16px;background:var(--surface-2)"></div>
+      </div>`;
+
+    $("btn-orders-refresh")?.addEventListener("click", () => loadOrders(root));
+    root.querySelectorAll(".btn-order-detail, tr.order-row").forEach((el) => {
+      el.addEventListener("click", (ev) => {
+        const btn = ev.target.closest("[data-order-id]");
+        const id = btn?.getAttribute("data-order-id");
+        if (!id) return;
+        ev.preventDefault();
+        openOrderDetail(root, id);
+      });
+    });
+  } catch (e) {
+    const msg = e.message || String(e);
+    const suspended = /brand_suspended/i.test(msg);
+    root.innerHTML = `
+      <div class="panel">
+        <h2>Orders</h2>
+        <p class="muted">${escapeHtml(
+          suspended
+            ? "This brand is suspended. Orders are not available until the brand is reactivated."
+            : msg
+        )}</p>
+        <button class="btn" type="button" id="btn-orders-retry">Retry</button>
+      </div>`;
+    $("btn-orders-retry")?.addEventListener("click", () => loadOrders(root));
+  }
+}
+
+async function openOrderDetail(root, orderId) {
+  const panel = root.querySelector("#order-detail-panel");
+  if (!panel) return;
+  panel.hidden = false;
+  panel.innerHTML = `<p class="muted">Loading order…</p>`;
+  try {
+    const data = await brandFetch("brand-api-order-get", { query: { order_id: orderId } });
+    const o = data.order;
+    if (!o) {
+      panel.innerHTML = `<p class="muted">Order not found.</p>`;
+      return;
+    }
+    const customer = o.customer || {};
+    const ship = o.shipping_address || {};
+    const customerLabel = [customer.first_name, customer.last_name].filter(Boolean).join(" ") || "—";
+    panel.innerHTML = `
+      <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-start">
+        <div>
+          <h3 style="margin:0 0 4px">${escapeHtml(o.name || o.id)}</h3>
+          <p class="muted" style="margin:0">${o.created_at ? escapeHtml(new Date(o.created_at).toLocaleString()) : ""}</p>
+        </div>
+        <button type="button" class="btn" id="btn-close-order-detail">Close</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-top:16px">
+        <div>
+          <p class="muted" style="margin:0 0 4px">Payment / fulfillment</p>
+          <p style="margin:0">
+            <span class="badge ${statusBadge(o.financial_status)}">${escapeHtml(o.financial_status || "—")}</span>
+            <span class="badge ${statusBadge(o.fulfillment_status)}">${escapeHtml(o.fulfillment_status || "unfulfilled")}</span>
+          </p>
+          <p style="margin:8px 0 0">Brand subtotal: <strong>${escapeHtml(
+            `${o.brand_subtotal || "—"} ${o.currency || ""}`.trim()
+          )}</strong></p>
+        </div>
+        <div>
+          <p class="muted" style="margin:0 0 4px">Customer</p>
+          <p style="margin:0">${escapeHtml(customerLabel)}</p>
+          <p class="muted" style="margin:4px 0 0">${escapeHtml(customer.email || "—")}</p>
+        </div>
+        <div>
+          <p class="muted" style="margin:0 0 4px">Shipping</p>
+          <p style="margin:0">${escapeHtml(ship.name || customerLabel)}</p>
+          <p class="muted" style="margin:4px 0 0;white-space:pre-line">${escapeHtml(
+            [ship.address1, ship.address2, [ship.zip, ship.city].filter(Boolean).join(" "), ship.province, ship.country]
+              .filter(Boolean)
+              .join("\n") || "—"
+          )}</p>
+        </div>
+      </div>
+      <div class="table-wrap" style="margin-top:16px">
+        <table class="data">
+          <thead><tr><th>Item</th><th>Qty</th><th>Price</th><th>SKU</th></tr></thead>
+          <tbody>
+            ${(o.line_items || [])
+              .map(
+                (li) => `<tr>
+              <td>${escapeHtml(li.title || "—")}${
+                  li.variant_title ? ` <span class="muted">(${escapeHtml(li.variant_title)})</span>` : ""
+                }</td>
+              <td>${escapeHtml(String(li.quantity ?? "—"))}</td>
+              <td>${escapeHtml(li.price != null ? String(li.price) : "—")}</td>
+              <td>${escapeHtml(li.sku || "—")}</td>
+            </tr>`
+              )
+              .join("") || `<tr><td colspan="4" class="muted">No brand line items</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+      <p class="muted" style="margin:12px 0 0;font-size:0.85rem">Read-only. Fulfillment and refunds are handled on the eazpire platform shop.</p>`;
+    $("btn-close-order-detail")?.addEventListener("click", () => {
+      panel.hidden = true;
+      panel.innerHTML = "";
+    });
+  } catch (err) {
+    panel.innerHTML = `<p class="muted">${escapeHtml(err.message)}</p>`;
+  }
 }
 
 function renderSettings() {
@@ -539,7 +708,7 @@ function renderSettings() {
     </div>
     <div class="panel">
       <h2>eazpire API keys</h2>
-      <p class="muted">Machine access to the Brand API (catalog, sync, dual-publish, team, profile). Keys are hashed at rest; the full key is shown <strong>once</strong> when created. This is not Shopify and not Link eazpire Account.</p>
+      <p class="muted">Machine access to the Brand API (catalog, sync, dual-publish, team, profile, orders, webhooks). Keys are hashed at rest; the full key is shown <strong>once</strong> when created. This is not Shopify and not Link eazpire Account.</p>
       <p style="margin:0 0 12px"><a href="/docs" target="_blank" rel="noopener">View API documentation</a></p>
       <div class="actions-row" style="margin-bottom:12px">
         <input type="text" id="api-key-name" placeholder="Key name (e.g. Production)" style="min-width:200px;flex:1" />
@@ -632,6 +801,7 @@ const API_SCOPE_OPTIONS = [
   "team:write",
   "webhooks:read",
   "webhooks:write",
+  "orders:read",
 ];
 
 const WEBHOOK_EVENT_OPTIONS = [

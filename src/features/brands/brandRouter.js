@@ -62,6 +62,7 @@ import {
   handleBrandWebhooksRevoke,
   handleBrandWebhooksTest,
 } from "./brandWebhooks.js";
+import { handleBrandOrdersList, handleBrandOrderGet } from "./brandOrders.js";
 import { requireBrandAuth } from "./rbac.js";
 
 export async function handleBrandRouter(request, env, ctx) {
@@ -126,6 +127,14 @@ export async function handleBrandRouter(request, env, ctx) {
     if (op === "brand-api-keys" || op === "brand-api-keys-list") return handleBrandApiKeysList(request, env);
     if (op === "brand-api-keys-create") return handleBrandApiKeysCreate(request, env);
     if (op === "brand-api-keys-revoke") return handleBrandApiKeysRevoke(request, env);
+
+    // Orders (read-only) — eazpire platform shop, filtered to dual-published brand products
+    if (op === "brand-api-orders" || op === "brand-orders") {
+      return handleBrandOrdersList(request, env);
+    }
+    if (op === "brand-api-order-get" || op === "brand-order-get") {
+      return handleBrandOrderGet(request, env);
+    }
 
     // Webhooks — session or API key with webhooks:read / webhooks:write
     if (op === "brand-api-webhooks" || op === "brand-webhooks-list") {

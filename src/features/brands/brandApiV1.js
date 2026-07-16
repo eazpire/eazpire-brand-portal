@@ -16,6 +16,7 @@ const API_V1_MAP = {
   "/api/v1/team/revoke": "brand-api-team-revoke",
   "/api/v1/memberships": "brand-api-memberships",
   "/api/v1/keys": "brand-api-keys",
+  "/api/v1/orders": "brand-api-orders",
   "/api/v1/webhooks": null, // method-aware below
 };
 
@@ -79,6 +80,19 @@ export function rewriteBrandApiV1Request(request) {
       url.searchParams.set("product_id", segment);
       return new Request(url.toString(), request);
     }
+  }
+
+  // GET /api/v1/orders/:id
+  const orderMatch = pathname.match(/^\/api\/v1\/orders\/([^/]+)$/);
+  if (orderMatch) {
+    const orderId = decodeURIComponent(orderMatch[1]);
+    const method = (request.method || "GET").toUpperCase();
+    if (method === "GET" || method === "HEAD") {
+      url.searchParams.set("op", "brand-api-order-get");
+      url.searchParams.set("order_id", orderId);
+      return new Request(url.toString(), request);
+    }
+    return null;
   }
 
   const mapped = API_V1_MAP[pathname];
