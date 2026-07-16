@@ -36,6 +36,32 @@ describe("rewriteBrandApiV1Request", () => {
     );
     expect(new URL(out.url).searchParams.get("op")).toBe("brand-api-team-invite");
   });
+
+  it("maps webhooks list/create and id actions", () => {
+    const list = rewriteBrandApiV1Request(new Request("https://brand.eazpire.com/api/v1/webhooks"));
+    expect(new URL(list.url).searchParams.get("op")).toBe("brand-api-webhooks");
+
+    const create = rewriteBrandApiV1Request(
+      new Request("https://brand.eazpire.com/api/v1/webhooks", { method: "POST" })
+    );
+    expect(new URL(create.url).searchParams.get("op")).toBe("brand-api-webhooks-create");
+
+    const update = rewriteBrandApiV1Request(
+      new Request("https://brand.eazpire.com/api/v1/webhooks/bwh_1", { method: "POST" })
+    );
+    expect(new URL(update.url).searchParams.get("op")).toBe("brand-api-webhooks-update");
+    expect(new URL(update.url).searchParams.get("webhook_id")).toBe("bwh_1");
+
+    const test = rewriteBrandApiV1Request(
+      new Request("https://brand.eazpire.com/api/v1/webhooks/bwh_1/test", { method: "POST" })
+    );
+    expect(new URL(test.url).searchParams.get("op")).toBe("brand-api-webhooks-test");
+
+    const revoke = rewriteBrandApiV1Request(
+      new Request("https://brand.eazpire.com/api/v1/webhooks/bwh_1/revoke", { method: "POST" })
+    );
+    expect(new URL(revoke.url).searchParams.get("op")).toBe("brand-api-webhooks-revoke");
+  });
 });
 
 describe("brand API scopes", () => {
@@ -43,6 +69,8 @@ describe("brand API scopes", () => {
     expect(DEFAULT_BRAND_API_SCOPES).toContain(BRAND_API_SCOPES.BRAND_WRITE);
     expect(DEFAULT_BRAND_API_SCOPES).toContain(BRAND_API_SCOPES.TEAM_INVITE);
     expect(DEFAULT_BRAND_API_SCOPES).toContain(BRAND_API_SCOPES.CONNECTIONS_READ);
+    expect(DEFAULT_BRAND_API_SCOPES).toContain(BRAND_API_SCOPES.WEBHOOKS_READ);
+    expect(DEFAULT_BRAND_API_SCOPES).toContain(BRAND_API_SCOPES.WEBHOOKS_WRITE);
   });
 
   it("authHasScope respects wildcard and session", () => {

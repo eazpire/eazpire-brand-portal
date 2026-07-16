@@ -55,9 +55,16 @@ import {
   handleBrandApiKeysCreate,
   handleBrandApiKeysRevoke,
 } from "./brandApiKeys.js";
+import {
+  handleBrandWebhooksList,
+  handleBrandWebhooksCreate,
+  handleBrandWebhooksUpdate,
+  handleBrandWebhooksRevoke,
+  handleBrandWebhooksTest,
+} from "./brandWebhooks.js";
 import { requireBrandAuth } from "./rbac.js";
 
-export async function handleBrandRouter(request, env) {
+export async function handleBrandRouter(request, env, ctx) {
   const url = new URL(request.url);
   const op = url.searchParams.get("op");
   if (!op) return null;
@@ -94,22 +101,24 @@ export async function handleBrandRouter(request, env) {
     if (op === "brand-products" || op === "brand-api-products") return handleBrandProductsList(request, env);
     if (op === "brand-api-product-get" || op === "brand-product-get") return handleBrandProductGet(request, env);
     if (op === "brand-api-product-update" || op === "brand-product-update") {
-      return handleBrandProductUpdate(request, env);
+      return handleBrandProductUpdate(request, env, ctx);
     }
-    if (op === "brand-products-sync" || op === "brand-api-sync") return handleBrandProductsSync(request, env);
+    if (op === "brand-products-sync" || op === "brand-api-sync") {
+      return handleBrandProductsSync(request, env, ctx);
+    }
     if (
       op === "brand-dual-publish" ||
       op === "brand-products-publish" ||
       op === "brand-api-publish"
     ) {
-      return handleBrandDualPublish(request, env);
+      return handleBrandDualPublish(request, env, ctx);
     }
     if (
       op === "brand-dual-unpublish" ||
       op === "brand-products-unpublish" ||
       op === "brand-api-unpublish"
     ) {
-      return handleBrandDualUnpublish(request, env);
+      return handleBrandDualUnpublish(request, env, ctx);
     }
     if (op === "brand-team" || op === "brand-api-team") return handleBrandTeamList(request, env);
 
@@ -117,6 +126,23 @@ export async function handleBrandRouter(request, env) {
     if (op === "brand-api-keys" || op === "brand-api-keys-list") return handleBrandApiKeysList(request, env);
     if (op === "brand-api-keys-create") return handleBrandApiKeysCreate(request, env);
     if (op === "brand-api-keys-revoke") return handleBrandApiKeysRevoke(request, env);
+
+    // Webhooks — session or API key with webhooks:read / webhooks:write
+    if (op === "brand-api-webhooks" || op === "brand-webhooks-list") {
+      return handleBrandWebhooksList(request, env);
+    }
+    if (op === "brand-api-webhooks-create" || op === "brand-webhooks-create") {
+      return handleBrandWebhooksCreate(request, env);
+    }
+    if (op === "brand-api-webhooks-update" || op === "brand-webhooks-update") {
+      return handleBrandWebhooksUpdate(request, env);
+    }
+    if (op === "brand-api-webhooks-revoke" || op === "brand-webhooks-revoke") {
+      return handleBrandWebhooksRevoke(request, env);
+    }
+    if (op === "brand-api-webhooks-test" || op === "brand-webhooks-test") {
+      return handleBrandWebhooksTest(request, env);
+    }
 
     // Memberships for the signed-in user (Creator invites) — session only; not Brand API key
     if (op === "brand-my-memberships" || op === "brand-api-memberships") {

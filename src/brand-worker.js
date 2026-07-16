@@ -17,7 +17,7 @@ export default {
     }
 
     const apiRequest = rewriteBrandApiV1Request(request) || request;
-    const apiResp = await handleBrandRouter(apiRequest, env);
+    const apiResp = await handleBrandRouter(apiRequest, env, ctx);
     if (apiResp) return apiResp;
 
     const portalResp = await handleBrandPortalRequest(request, env);

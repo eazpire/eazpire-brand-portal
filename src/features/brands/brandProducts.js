@@ -7,6 +7,7 @@ import { newId } from "./db.js";
 import { getBrandPrintifyCredentials } from "./brandConnections.js";
 import { resolveBrandAuthContext } from "./brandAuthContext.js";
 import { BRAND_API_SCOPES } from "./rbac.js";
+import { emitBrandWebhook } from "./brandWebhookDelivery.js";
 
 async function printifyGet(token, path) {
   const res = await fetch(`https://api.printify.com/v1${path}`, {
@@ -101,7 +102,7 @@ export async function handleBrandProductGet(request, env) {
  * Update local catalog metadata (title / status).
  * Does not write back to Printify — re-sync may overwrite title/status from Printify.
  */
-export async function handleBrandProductUpdate(request, env) {
+export async function handleBrandProductUpdate(request, env, ctx) {
   const cors = getCorsHeaders(request);
   if (request.method !== "POST" && request.method !== "PATCH" && request.method !== "PUT") {
     return json({ ok: false, error: "method_not_allowed" }, 405, cors);
@@ -155,10 +156,14 @@ export async function handleBrandProductUpdate(request, env) {
     .bind(productId)
     .first();
 
+  emitBrandWebhook(env, ctx, brand.id, "product.updated", {
+    product: mapProductRow(updated),
+  });
+
   return json({ ok: true, product: mapProductRow(updated) }, 200, cors);
 }
 
-export async function handleBrandProductsSync(request, env) {
+export async function handleBrandProductsSync(request, env, ctx) {
   const cors = getCorsHeaders(request);
   if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405, cors);
 
@@ -245,6 +250,11 @@ export async function handleBrandProductsSync(request, env) {
     if (list.length < 50) break;
     page += 1;
   }
+
+  emitBrandWebhook(env, ctx, brand.id, "product.synced", {
+    synced,
+    pages: page,
+  });
 
   return json({ ok: true, synced, pages: page }, 200, cors);
 }

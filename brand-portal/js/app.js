@@ -553,6 +553,20 @@ function renderSettings() {
       <div id="api-keys-list" class="muted">Loading keys…</div>
     </div>
     <div class="panel">
+      <h2>Webhooks</h2>
+      <p class="muted">Receive HTTPS callbacks when products are published, unpublished, updated, or synced — so your systems do not need to poll. Signing secret is shown <strong>once</strong>. See <a href="/docs#webhooks" target="_blank" rel="noopener">webhook docs</a>.</p>
+      <div class="actions-row" style="margin-bottom:12px;flex-wrap:wrap">
+        <input type="url" id="webhook-url" placeholder="https://example.com/hooks/eazpire" style="min-width:260px;flex:1" />
+        <button class="btn btn-primary" id="btn-create-webhook">Add webhook</button>
+      </div>
+      <div id="webhook-events" style="margin-bottom:12px">
+        <p class="muted" style="margin:0 0 8px">Events (defaults: all product events)</p>
+        <div style="display:flex;flex-wrap:wrap;gap:8px 14px;font-size:0.88rem" id="webhook-event-checks"></div>
+      </div>
+      <div id="webhook-once" hidden class="panel" style="background:rgba(0,0,0,.04);margin-bottom:12px"></div>
+      <div id="webhooks-list" class="muted">Loading webhooks…</div>
+    </div>
+    <div class="panel">
       <h2>Creator invites</h2>
       <p class="muted">If you were invited to another brand, accept here so Creator can see that workspace after you link your eazpire Account.</p>
       <button class="btn" id="btn-accept-invites">Accept pending invites</button>
@@ -586,9 +600,12 @@ function renderSettings() {
     }
   });
   $("btn-create-api-key")?.addEventListener("click", () => createApiKey());
+  $("btn-create-webhook")?.addEventListener("click", () => createWebhook());
   wireScopePicker();
+  wireWebhookEventPicker();
   loadMemberships();
   loadApiKeys();
+  loadWebhooks();
 
   const params = new URLSearchParams(location.search);
   if (params.get("customer_linked") === "1") {
@@ -613,6 +630,15 @@ const API_SCOPE_OPTIONS = [
   "team:read",
   "team:invite",
   "team:write",
+  "webhooks:read",
+  "webhooks:write",
+];
+
+const WEBHOOK_EVENT_OPTIONS = [
+  "product.published",
+  "product.unpublished",
+  "product.updated",
+  "product.synced",
 ];
 
 function wireScopePicker() {
@@ -632,10 +658,24 @@ function wireScopePicker() {
   });
 }
 
+function wireWebhookEventPicker() {
+  const host = $("webhook-event-checks");
+  if (!host) return;
+  host.innerHTML = WEBHOOK_EVENT_OPTIONS.map(
+    (e) =>
+      `<label><input type="checkbox" class="webhook-event-opt" value="${escapeAttr(e)}" checked /> <code>${escapeHtml(e)}</code></label>`
+  ).join("");
+}
+
 function selectedApiScopes() {
   if ($("scope-star")?.checked) return ["*"];
   const picked = [...document.querySelectorAll(".scope-opt:checked")].map((el) => el.value);
   return picked.length ? picked : [...API_SCOPE_OPTIONS];
+}
+
+function selectedWebhookEvents() {
+  const picked = [...document.querySelectorAll(".webhook-event-opt:checked")].map((el) => el.value);
+  return picked.length ? picked : [...WEBHOOK_EVENT_OPTIONS];
 }
 
 async function loadApiKeys() {
@@ -715,6 +755,143 @@ async function createApiKey() {
     if ($("api-key-name")) $("api-key-name").value = "";
     showToast("API key created");
     loadApiKeys();
+  } catch (err) {
+    showToast(err.message, { error: true });
+  }
+}
+
+async function loadWebhooks() {
+  const box = $("webhooks-list");
+  if (!box) return;
+  try {
+    const data = await brandFetch("brand-api-webhooks");
+    const hooks = data.webhooks || [];
+    if (!hooks.length) {
+      box.textContent = "No webhooks yet.";
+      return;
+    }
+    box.innerHTML = `<div class="table-wrap"><table class="data">
+      <thead><tr><th>URL</th><th>Events</th><th>Status</th><th>Last delivery</th><th></th></tr></thead>
+      <tbody>${hooks
+        .map(
+          (h) => `<tr>
+        <td style="max-width:240px;word-break:break-all;font-size:0.85rem">${escapeHtml(h.url)}</td>
+        <td style="max-width:200px;font-size:0.8rem">${escapeHtml((h.events || []).join(", ") || "—")}</td>
+        <td><span class="badge ${h.status === "active" ? "badge-success" : "badge-danger"}">${escapeHtml(h.status)}</span>${
+            h.last_error ? `<div class="muted" style="font-size:0.75rem;max-width:160px">${escapeHtml(h.last_error)}</div>` : ""
+          }</td>
+        <td>${h.last_delivery_at ? escapeHtml(new Date(h.last_delivery_at).toLocaleString()) : "—"}</td>
+        <td style="white-space:nowrap">
+          ${
+            h.status === "active"
+              ? `<button type="button" class="btn btn-secondary btn-test-webhook" data-id="${escapeHtml(h.id)}">Test</button>
+                 <button type="button" class="btn btn-secondary btn-disable-webhook" data-id="${escapeHtml(h.id)}">Disable</button>`
+              : `<button type="button" class="btn btn-secondary btn-enable-webhook" data-id="${escapeHtml(h.id)}">Enable</button>`
+          }
+          <button type="button" class="btn btn-secondary btn-delete-webhook" data-id="${escapeHtml(h.id)}">Delete</button>
+        </td>
+      </tr>`
+        )
+        .join("")}</tbody></table></div>`;
+
+    box.querySelectorAll(".btn-test-webhook").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        try {
+          const res = await brandFetch("brand-api-webhooks-test", {
+            method: "POST",
+            body: { webhook_id: btn.getAttribute("data-id") },
+          });
+          showToast(res.sent ? "Ping delivered" : "Ping failed — check URL / logs", {
+            error: !res.sent,
+          });
+          loadWebhooks();
+        } catch (err) {
+          showToast(err.message, { error: true });
+        }
+      });
+    });
+    box.querySelectorAll(".btn-disable-webhook").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        try {
+          await brandFetch("brand-api-webhooks-update", {
+            method: "POST",
+            body: { webhook_id: btn.getAttribute("data-id"), status: "disabled" },
+          });
+          showToast("Webhook disabled");
+          loadWebhooks();
+        } catch (err) {
+          showToast(err.message, { error: true });
+        }
+      });
+    });
+    box.querySelectorAll(".btn-enable-webhook").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        try {
+          await brandFetch("brand-api-webhooks-update", {
+            method: "POST",
+            body: { webhook_id: btn.getAttribute("data-id"), status: "active" },
+          });
+          showToast("Webhook enabled");
+          loadWebhooks();
+        } catch (err) {
+          showToast(err.message, { error: true });
+        }
+      });
+    });
+    box.querySelectorAll(".btn-delete-webhook").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        if (!confirm("Delete this webhook permanently?")) return;
+        try {
+          await brandFetch("brand-api-webhooks-revoke", {
+            method: "POST",
+            body: { webhook_id: btn.getAttribute("data-id"), hard: true },
+          });
+          showToast("Webhook deleted");
+          const once = $("webhook-once");
+          if (once) once.hidden = true;
+          loadWebhooks();
+        } catch (err) {
+          showToast(err.message, { error: true });
+        }
+      });
+    });
+  } catch (e) {
+    box.textContent = e.message;
+  }
+}
+
+async function createWebhook() {
+  const url = String($("webhook-url")?.value || "").trim();
+  if (!url) {
+    showToast("Enter a webhook URL", { error: true });
+    return;
+  }
+  try {
+    const events = selectedWebhookEvents();
+    const res = await brandFetch("brand-api-webhooks-create", {
+      method: "POST",
+      body: { url, events },
+    });
+    const once = $("webhook-once");
+    if (once && res.secret) {
+      once.hidden = false;
+      once.innerHTML = `
+        <p><strong>Copy this signing secret now</strong> — it will not be shown again.</p>
+        <p><code id="webhook-secret-raw" style="word-break:break-all">${escapeHtml(res.secret)}</code></p>
+        <p class="muted">Verify deliveries with header <code>X-Eazpire-Signature: sha256=…</code> (HMAC-SHA256 of the raw body).</p>
+        <button type="button" class="btn btn-secondary" id="btn-copy-webhook-secret">Copy to clipboard</button>`;
+      $("btn-copy-webhook-secret")?.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(res.secret);
+          showToast("Copied");
+        } catch {
+          showToast("Copy failed — select the secret manually", { error: true });
+        }
+      });
+    }
+    if ($("webhook-url")) $("webhook-url").value = "";
+    showToast("Webhook created");
+    loadWebhooks();
   } catch (err) {
     showToast(err.message, { error: true });
   }

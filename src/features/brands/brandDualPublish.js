@@ -7,6 +7,7 @@ import { json, getCorsHeaders } from "../../utils/response.js";
 import { shopifyAPI } from "../../utils/shopify.js";
 import { resolveBrandAuthContext } from "./brandAuthContext.js";
 import { BRAND_API_SCOPES } from "./rbac.js";
+import { emitBrandWebhook } from "./brandWebhookDelivery.js";
 
 function shopDomain(env) {
   return String(env.SHOPIFY_SHOP || "allyoucanpink.myshopify.com")
@@ -163,7 +164,7 @@ async function draftEazpireListing(env, product) {
 
 /**
  * Core publish helper — usable by brand session API and admin force ops.
- * @param {{ productIds?: string[], limit?: number }} opts
+ * @param {{ productIds?: string[], limit?: number, ctx?: object }} opts
  */
 export async function publishBrandProductsToEazpire(env, db, brand, opts = {}) {
   const productIds = Array.isArray(opts.productIds)
@@ -216,6 +217,14 @@ export async function publishBrandProductsToEazpire(env, db, brand, opts = {}) {
         .bind(out.shopify_product_id, out.handle, now, now, product.id)
         .run();
       results.push({ id: product.id, ok: true, ...out });
+      emitBrandWebhook(env, opts.ctx, brand.id, "product.published", {
+        product_id: product.id,
+        printify_product_id: product.printify_product_id,
+        title: product.title,
+        eazpire_shopify_product_id: out.shopify_product_id,
+        eazpire_handle: out.handle,
+        dual_publish_status: "published",
+      });
     } catch (e) {
       const msg = String(e?.message || e).slice(0, 400);
       await db
@@ -238,7 +247,7 @@ export async function publishBrandProductsToEazpire(env, db, brand, opts = {}) {
 
 /**
  * Core unpublish helper — drafts eazpire listings and clears dual-publish status.
- * @param {{ productIds?: string[], all?: boolean }} opts
+ * @param {{ productIds?: string[], all?: boolean, ctx?: object }} opts
  */
 export async function unpublishBrandProductsFromEazpire(env, db, brand, opts = {}) {
   const productIds = Array.isArray(opts.productIds)
@@ -291,6 +300,14 @@ export async function unpublishBrandProductsFromEazpire(env, db, brand, opts = {
         .bind(now, product.id)
         .run();
       results.push({ id: product.id, ok: true, ...out });
+      emitBrandWebhook(env, opts.ctx, brand.id, "product.unpublished", {
+        product_id: product.id,
+        printify_product_id: product.printify_product_id,
+        title: product.title,
+        eazpire_shopify_product_id: product.eazpire_shopify_product_id,
+        eazpire_handle: product.eazpire_handle,
+        dual_publish_status: "unpublished",
+      });
     } catch (e) {
       const msg = String(e?.message || e).slice(0, 400);
       await db
@@ -314,7 +331,7 @@ export async function unpublishBrandProductsFromEazpire(env, db, brand, opts = {
 /** POST ?op=brand-dual-publish | brand-products-publish | brand-api-publish
  * Dual-publish allowed with valid Brand API key (brand-scoped) OR portal session.
  * Link eazpire Account is NOT required for catalog dual-publish — only for Creator design workspace. */
-export async function handleBrandDualPublish(request, env) {
+export async function handleBrandDualPublish(request, env, ctx) {
   const cors = getCorsHeaders(request);
   if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405, cors);
 
@@ -333,12 +350,12 @@ export async function handleBrandDualPublish(request, env) {
       : [];
   const limit = Math.min(Math.max(Number(body.limit || 20) || 20, 1), 50);
 
-  const out = await publishBrandProductsToEazpire(env, db, brand, { productIds, limit });
+  const out = await publishBrandProductsToEazpire(env, db, brand, { productIds, limit, ctx });
   return json({ ok: true, ...out }, 200, cors);
 }
 
 /** POST ?op=brand-products-unpublish | brand-api-unpublish | brand-dual-unpublish */
-export async function handleBrandDualUnpublish(request, env) {
+export async function handleBrandDualUnpublish(request, env, ctx) {
   const cors = getCorsHeaders(request);
   if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405, cors);
 
@@ -361,7 +378,7 @@ export async function handleBrandDualUnpublish(request, env) {
     return json({ ok: false, error: "product_ids_or_all_required" }, 400, cors);
   }
 
-  const out = await unpublishBrandProductsFromEazpire(env, db, brand, { productIds, all });
+  const out = await unpublishBrandProductsFromEazpire(env, db, brand, { productIds, all, ctx });
   return json({ ok: true, ...out }, 200, cors);
 }
 

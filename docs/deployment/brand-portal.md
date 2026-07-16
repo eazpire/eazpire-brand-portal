@@ -142,14 +142,35 @@ Portal and external clients use the same handlers on `brand.eazpire.com`. Prefer
 | `/api/v1/team/revoke` | POST | Revoke member | `team:write` |
 | `/api/v1/memberships` | GET | Personal memberships (session only) | — |
 | `/api/v1/keys` | GET | List API keys (session only) | — |
+| `/api/v1/webhooks` | GET | List webhooks (no secret) | `webhooks:read` |
+| `/api/v1/webhooks` | POST | Create webhook (returns signing secret once) | `webhooks:write` |
+| `/api/v1/webhooks/{id}` | POST | Update url / events / status | `webhooks:write` |
+| `/api/v1/webhooks/{id}/revoke` | POST | Disable (or `{ hard: true }` delete) | `webhooks:write` |
+| `/api/v1/webhooks/{id}/test` | POST | Send `webhook.ping` | `webhooks:write` |
 
-Orders API and webhook registration: **coming soon** (not implemented).
+Orders API: **coming soon** (not implemented).
 
-Equivalent `?op=` names include `brand-api-overview`, `brand-api-brand`, `brand-api-brand-update`, `brand-api-connections`, `brand-api-products`, `brand-api-product-get`, `brand-api-product-update`, `brand-api-sync`, `brand-api-publish`, `brand-api-unpublish`, `brand-api-team`, `brand-api-team-invite`, `brand-api-team-update`, `brand-api-team-revoke`, `brand-api-memberships`, `brand-api-keys` / create / revoke.
+Equivalent `?op=` names include `brand-api-overview`, `brand-api-brand`, `brand-api-brand-update`, `brand-api-connections`, `brand-api-products`, `brand-api-product-get`, `brand-api-product-update`, `brand-api-sync`, `brand-api-publish`, `brand-api-unpublish`, `brand-api-team`, `brand-api-team-invite`, `brand-api-team-update`, `brand-api-team-revoke`, `brand-api-memberships`, `brand-api-keys` / create / revoke, `brand-api-webhooks` / create / update / revoke / test.
 
 ### Scopes
 
-New keys default to all of: `overview:read`, `brand:read`, `brand:write`, `connections:read`, `products:read`, `products:write`, `products:sync`, `products:publish`, `team:read`, `team:invite`, `team:write`. Settings UI can pick a subset or `*`. Session auth has full access (`*`).
+New keys default to all of: `overview:read`, `brand:read`, `brand:write`, `connections:read`, `products:read`, `products:write`, `products:sync`, `products:publish`, `team:read`, `team:invite`, `team:write`, `webhooks:read`, `webhooks:write`. Settings UI can pick a subset or `*`. Session auth has full access (`*`).
+
+### Webhooks
+
+Outbound HTTPS callbacks after catalog actions. Signing secret encrypted at rest (AES-GCM via `BRAND_SECRETS_KEY`); plaintext shown once on create.
+
+| Event | Trigger |
+|-------|---------|
+| `product.published` | Successful dual-publish |
+| `product.unpublished` | Unpublish / draft on eazpire |
+| `product.updated` | Local product title/status write |
+| `product.synced` | Printify sync finished (`synced` count) |
+| `webhook.ping` | Manual test |
+
+Headers: `X-Eazpire-Event`, `X-Eazpire-Delivery-Id`, `X-Eazpire-Signature: sha256=<hmac_hex>` (HMAC-SHA256 of raw body). Retries 3× on 5xx/timeout; auto-disable after repeated failures. HTTPS only (localhost HTTP allowed); private/metadata IPs blocked.
+
+Migration: `migrations-brand/0005_brand_webhooks.sql` (+ `ensureBrandSchema`).
 
 ### Example curl
 
@@ -175,6 +196,12 @@ curl -sS -X POST "https://brand.eazpire.com/api/v1/products/publish" \
   -H "Authorization: Bearer eaz_brand_YOUR_KEY" \
   -H "Content-Type: application/json" \
   -d '{"product_ids":["bp_…"]}'
+
+# Register webhook (secret returned once)
+curl -sS -X POST "https://brand.eazpire.com/api/v1/webhooks" \
+  -H "Authorization: Bearer eaz_brand_YOUR_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://example.com/hooks/eazpire","events":["product.published","product.unpublished"]}'
 
 # Same via ?op=
 curl -sS "https://brand.eazpire.com/?op=brand-api-overview" \

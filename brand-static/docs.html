@@ -115,7 +115,7 @@
       <div class="logo-mark">EB</div>
       <div>
         <h1>Brand API Documentation</h1>
-        <p>Machine access to your brand on <strong>brand.eazpire.com</strong> — catalog, dual-publish, team, and profile.</p>
+        <p>Machine access to your brand on <strong>brand.eazpire.com</strong> — catalog, dual-publish, team, webhooks, and profile.</p>
       </div>
     </div>
 
@@ -123,6 +123,7 @@
       <a href="#auth">Authentication</a>
       <a href="#scopes">Scopes</a>
       <a href="#endpoints">Endpoints</a>
+      <a href="#webhooks">Webhooks</a>
       <a href="#errors">Errors</a>
       <a href="#examples">Examples</a>
       <a href="/settings">Portal Settings</a>
@@ -159,6 +160,8 @@
           <tr><td><code>team:read</code></td><td>List team members</td></tr>
           <tr><td><code>team:invite</code></td><td>Invite creators by email</td></tr>
           <tr><td><code>team:write</code></td><td>Update publish_mode / revoke members</td></tr>
+          <tr><td><code>webhooks:read</code></td><td>List webhooks</td></tr>
+          <tr><td><code>webhooks:write</code></td><td>Create / update / revoke / test webhooks</td></tr>
           <tr><td><code>*</code></td><td>All scopes</td></tr>
         </tbody>
       </table>
@@ -266,9 +269,97 @@
         </tbody>
       </table>
 
+      <h3>Webhooks</h3>
+      <table class="docs-table">
+        <thead><tr><th>Method / path</th><th>Scope</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="method">GET</span> <code>/api/v1/webhooks</code></td>
+            <td><code>webhooks:read</code></td>
+            <td>List endpoints (no signing secret)</td>
+          </tr>
+          <tr>
+            <td><span class="method">POST</span> <code>/api/v1/webhooks</code></td>
+            <td><code>webhooks:write</code></td>
+            <td>Create — returns <code>secret</code> once. Body: <code>{ url, events? }</code></td>
+          </tr>
+          <tr>
+            <td><span class="method">POST</span> <code>/api/v1/webhooks/{id}</code></td>
+            <td><code>webhooks:write</code></td>
+            <td>Update <code>url</code> / <code>events</code> / <code>status</code> (<code>active</code>|<code>disabled</code>)</td>
+          </tr>
+          <tr>
+            <td><span class="method">POST</span> <code>/api/v1/webhooks/{id}/revoke</code></td>
+            <td><code>webhooks:write</code></td>
+            <td>Disable. Pass <code>{ hard: true }</code> to delete</td>
+          </tr>
+          <tr>
+            <td><span class="method">POST</span> <code>/api/v1/webhooks/{id}/test</code></td>
+            <td><code>webhooks:write</code></td>
+            <td>Send <code>webhook.ping</code> to that URL</td>
+          </tr>
+        </tbody>
+      </table>
+
       <h3>Coming soon</h3>
-      <p>Orders API <span class="badge-soon">soon</span> — fulfillment / order sync is not exposed yet. Webhooks registration is planned for a later release.</p>
+      <p>Orders API <span class="badge-soon">soon</span> — fulfillment / order sync is not exposed yet.</p>
       <p class="muted"><code>/api/v1/memberships</code> and API key CRUD require a portal session (not API keys). Memberships need Link eazpire Account for Creator design.</p>
+    </section>
+
+    <section class="docs-section" id="webhooks">
+      <h2>Webhooks</h2>
+      <p>Register an HTTPS endpoint (localhost HTTP allowed for local testing). eazpire POSTs JSON when catalog events fire. Delivery retries up to 3 times on timeouts / 5xx; after repeated failures the webhook is auto-disabled.</p>
+
+      <h3>Events</h3>
+      <table class="docs-table">
+        <thead><tr><th>Event</th><th>When</th></tr></thead>
+        <tbody>
+          <tr><td><code>product.published</code></td><td>After successful dual-publish to eazpire</td></tr>
+          <tr><td><code>product.unpublished</code></td><td>After unpublish / draft on eazpire</td></tr>
+          <tr><td><code>product.updated</code></td><td>After local product title/status write</td></tr>
+          <tr><td><code>product.synced</code></td><td>After Printify sync completes (includes <code>synced</code> count)</td></tr>
+          <tr><td><code>webhook.ping</code></td><td>Manual test from portal or <code>/test</code></td></tr>
+        </tbody>
+      </table>
+
+      <h3>Headers</h3>
+      <ul>
+        <li><code>X-Eazpire-Event</code> — event name</li>
+        <li><code>X-Eazpire-Delivery-Id</code> — unique delivery id</li>
+        <li><code>X-Eazpire-Signature</code> — <code>sha256=&lt;hex&gt;</code> HMAC-SHA256 of the <strong>raw request body</strong> using your signing secret</li>
+        <li><code>Content-Type: application/json</code></li>
+      </ul>
+
+      <h3>Payload example</h3>
+      <pre class="docs-code">{
+  "id": "del_…",
+  "event": "product.published",
+  "created_at": 1710000000000,
+  "brand_id": "b_…",
+  "data": {
+    "product_id": "bp_…",
+    "printify_product_id": "…",
+    "title": "…",
+    "eazpire_shopify_product_id": "…",
+    "eazpire_handle": "…",
+    "dual_publish_status": "published"
+  }
+}</pre>
+
+      <h3>Verify signature (Node.js)</h3>
+      <pre class="docs-code">import crypto from "crypto";
+
+function verifyEazpireSignature(rawBody, signatureHeader, secret) {
+  const expected = "sha256=" + crypto
+    .createHmac("sha256", secret)
+    .update(rawBody, "utf8")
+    .digest("hex");
+  const a = Buffer.from(String(signatureHeader || ""));
+  const b = Buffer.from(expected);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}</pre>
+
+      <p class="muted">HTTPS URLs only (except <code>http://localhost</code> / <code>127.0.0.1</code>). Private / metadata IPs are blocked. Never log the full signing secret.</p>
     </section>
 
     <section class="docs-section" id="errors">
@@ -309,6 +400,12 @@
   -H "Authorization: Bearer eaz_brand_YOUR_KEY" \
   -H "Content-Type: application/json" \
   -d '{"product_ids":["bp_…"]}'</pre>
+
+      <h3>Register a webhook</h3>
+      <pre class="docs-code">curl -sS -X POST "https://brand.eazpire.com/api/v1/webhooks" \
+  -H "Authorization: Bearer eaz_brand_YOUR_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://example.com/hooks/eazpire","events":["product.published","product.unpublished"]}'</pre>
     </section>
 
     <p class="docs-footer">

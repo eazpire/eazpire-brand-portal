@@ -16,6 +16,7 @@ const API_V1_MAP = {
   "/api/v1/team/revoke": "brand-api-team-revoke",
   "/api/v1/memberships": "brand-api-memberships",
   "/api/v1/keys": "brand-api-keys",
+  "/api/v1/webhooks": null, // method-aware below
 };
 
 const PRODUCT_ACTION_SEGMENTS = new Set(["sync", "publish", "unpublish"]);
@@ -35,6 +36,33 @@ export function rewriteBrandApiV1Request(request) {
   if (pathname === "/api/v1/brand") {
     const method = (request.method || "GET").toUpperCase();
     const op = method === "GET" || method === "HEAD" ? "brand-api-brand" : "brand-api-brand-update";
+    url.searchParams.set("op", op);
+    return new Request(url.toString(), request);
+  }
+
+  // GET/POST /api/v1/webhooks
+  if (pathname === "/api/v1/webhooks") {
+    const method = (request.method || "GET").toUpperCase();
+    const op =
+      method === "GET" || method === "HEAD" ? "brand-api-webhooks" : "brand-api-webhooks-create";
+    url.searchParams.set("op", op);
+    return new Request(url.toString(), request);
+  }
+
+  // POST/PATCH/DELETE /api/v1/webhooks/:id[/test|/revoke]
+  const webhookMatch = pathname.match(/^\/api\/v1\/webhooks\/([^/]+)(?:\/(test|revoke))?$/);
+  if (webhookMatch) {
+    const webhookId = decodeURIComponent(webhookMatch[1]);
+    const action = webhookMatch[2] || "";
+    const method = (request.method || "GET").toUpperCase();
+    url.searchParams.set("webhook_id", webhookId);
+    let op = "brand-api-webhooks-update";
+    if (action === "test") op = "brand-api-webhooks-test";
+    else if (action === "revoke" || method === "DELETE") op = "brand-api-webhooks-revoke";
+    else if (method === "GET" || method === "HEAD") {
+      // No single-get yet — treat as update path unavailable
+      return null;
+    }
     url.searchParams.set("op", op);
     return new Request(url.toString(), request);
   }
