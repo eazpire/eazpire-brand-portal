@@ -300,14 +300,14 @@ async function renderProducts() {
   root.innerHTML = `<div class="panel"><p class="muted">Loading…</p></div>`;
   try {
     const status = root.dataset.filter || "";
-    const data = await brandFetch("brand-products", { query: status ? { status } : {} });
+    const data = await brandFetch("brand-api-products", { query: status ? { status } : {} });
     const products = data.products || [];
     root.innerHTML = `
       <div class="panel">
         <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center">
           <div>
             <h2 style="margin:0">Products</h2>
-            <p class="muted" style="margin:6px 0 0">Synced from your Printify shop. Dual-publish mirrors selected products onto eazpire.</p>
+            <p class="muted" style="margin:6px 0 0">Synced from your Printify shop. Publish mirrors selected products onto eazpire (not your own shop).</p>
           </div>
           <div class="actions-row" style="margin:0">
             <select class="input" id="product-filter" style="width:auto">
@@ -317,17 +317,19 @@ async function renderProducts() {
             </select>
             <button class="btn" id="btn-sync-products">Refresh sync</button>
             <button class="btn btn-primary" id="btn-dual-publish">Publish to eazpire</button>
+            <button class="btn" id="btn-dual-unpublish">Unpublish from eazpire</button>
           </div>
         </div>
         <div class="table-wrap" style="margin-top:16px">
           <table class="data">
-            <thead><tr><th></th><th>Title</th><th>Status</th><th>Printify</th><th>Brand Shopify</th><th>eazpire</th><th>Synced</th></tr></thead>
+            <thead><tr><th></th><th></th><th>Title</th><th>Status</th><th>Printify</th><th>Brand Shopify</th><th>eazpire</th><th>Synced</th></tr></thead>
             <tbody>
               ${
                 products.length
                   ? products
                       .map(
                         (p) => `<tr>
+                  <td><input type="checkbox" class="prod-select" value="${escapeAttr(p.id)}" /></td>
                   <td>${p.thumbnail_url ? `<img class="product-thumb" src="${escapeAttr(p.thumbnail_url)}" alt="" />` : ""}</td>
                   <td>${escapeHtml(p.title || "—")}</td>
                   <td><span class="badge ${statusBadge(p.status)}">${escapeHtml(p.status || "—")}</span></td>
@@ -336,6 +338,8 @@ async function renderProducts() {
                   <td>${
                     p.dual_publish_status === "published"
                       ? `<span class="badge ok">${escapeHtml(p.eazpire_handle || p.eazpire_shopify_product_id || "published")}</span>`
+                      : p.dual_publish_status === "unpublished"
+                        ? `<span class="badge">unpublished</span>`
                       : p.dual_publish_status === "error"
                         ? `<span class="badge warn" title="${escapeAttr(p.dual_publish_error || "")}">error</span>`
                         : `<span class="muted">—</span>`
@@ -344,12 +348,13 @@ async function renderProducts() {
                 </tr>`
                       )
                       .join("")
-                  : `<tr><td colspan="7" class="muted">No products yet. Connect Printify and run Refresh sync.</td></tr>`
+                  : `<tr><td colspan="8" class="muted">No products yet. Connect Printify and run Refresh sync.</td></tr>`
               }
             </tbody>
           </table>
         </div>
       </div>`;
+    const selectedIds = () => [...root.querySelectorAll(".prod-select:checked")].map((el) => el.value);
     $("btn-sync-products").addEventListener("click", async () => {
       try {
         const res = await brandFetch("brand-products-sync", { method: "POST", body: {} });
@@ -361,8 +366,27 @@ async function renderProducts() {
     });
     $("btn-dual-publish").addEventListener("click", async () => {
       try {
-        const res = await brandFetch("brand-dual-publish", { method: "POST", body: { limit: 20 } });
+        const ids = selectedIds();
+        const body = ids.length ? { product_ids: ids } : { limit: 20 };
+        const res = await brandFetch("brand-api-publish", { method: "POST", body });
         showToast(`Published ${res.published || 0} products to eazpire`);
+        renderProducts();
+      } catch (err) {
+        showToast(err.message, { error: true });
+      }
+    });
+    $("btn-dual-unpublish").addEventListener("click", async () => {
+      try {
+        const ids = selectedIds();
+        if (!ids.length) {
+          showToast("Select products to unpublish", { error: true });
+          return;
+        }
+        const res = await brandFetch("brand-api-unpublish", {
+          method: "POST",
+          body: { product_ids: ids },
+        });
+        showToast(`Unpublished ${res.unpublished || 0} from eazpire`);
         renderProducts();
       } catch (err) {
         showToast(err.message, { error: true });
