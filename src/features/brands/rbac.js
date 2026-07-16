@@ -14,13 +14,23 @@ export const BRAND_API_KEY_PREFIX = "eaz_brand_";
 
 export const BRAND_API_SCOPES = {
   OVERVIEW_READ: "overview:read",
+  BRAND_READ: "brand:read",
+  BRAND_WRITE: "brand:write",
+  CONNECTIONS_READ: "connections:read",
   PRODUCTS_READ: "products:read",
+  PRODUCTS_WRITE: "products:write",
   PRODUCTS_SYNC: "products:sync",
   PRODUCTS_PUBLISH: "products:publish",
   TEAM_READ: "team:read",
+  TEAM_INVITE: "team:invite",
+  TEAM_WRITE: "team:write",
 };
 
+/** Default scopes for newly created keys (everything except `*`). */
 export const DEFAULT_BRAND_API_SCOPES = Object.values(BRAND_API_SCOPES);
+
+/** Allowed scope strings when creating a key (defaults + wildcard). */
+export const ALLOWED_BRAND_API_SCOPES = DEFAULT_BRAND_API_SCOPES.concat(["*"]);
 
 function getJwtSecret(env) {
   const s = String(env.BRAND_JWT_SECRET || env.JWT_APP_SECRET || "").trim();

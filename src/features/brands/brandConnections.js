@@ -4,9 +4,10 @@
 
 import { json, getCorsHeaders } from "../../utils/response.js";
 import { getBrandDb, brandDbUnavailable, newId, ensureBrandSchema } from "./db.js";
-import { requireBrandSession } from "./rbac.js";
+import { requireBrandSession, BRAND_API_SCOPES } from "./rbac.js";
 import { encryptSecret, decryptSecret, maskSecret } from "./secrets.js";
 import { getOwnedBrand } from "./brandProfile.js";
+import { resolveBrandAuthContext } from "./brandAuthContext.js";
 
 function parseMeta(row) {
   if (!row?.meta_json) return {};
@@ -105,16 +106,14 @@ async function shopifyFetch(shop, token, path) {
   return { ok: res.ok, status: res.status, data };
 }
 
+/** Connection status only — never returns secrets (session or API key with connections:read) */
 export async function handleBrandConnectionsList(request, env) {
-  const cors = getCorsHeaders(request);
-  const session = await requireBrandSession(request, env);
-  if (!session) return json({ ok: false, error: "unauthorized" }, 401, cors);
-  const db = getBrandDb(env);
-  if (!db) return json(brandDbUnavailable(), 503, cors);
-  await ensureBrandSchema(env);
-
-  const brand = await getOwnedBrand(db, session.uid);
-  if (!brand) return json({ ok: false, error: "brand_required" }, 400, cors);
+  const resolved = await resolveBrandAuthContext(request, env, {
+    scope: BRAND_API_SCOPES.CONNECTIONS_READ,
+    allowSuspended: true,
+  });
+  if (resolved.error) return resolved.error;
+  const { cors, db, brand } = resolved;
 
   const rows = await db
     .prepare(

@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Brand API Documentation — Eazpire</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/shared/css/brand-ui.css" />
+  <style>
+    .docs-page {
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 32px 20px 80px;
+    }
+    .docs-hero {
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+      margin-bottom: 28px;
+    }
+    .docs-hero h1 { margin: 0 0 6px; font-size: 1.75rem; }
+    .docs-hero p { margin: 0; color: var(--muted); }
+    .docs-nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 28px;
+    }
+    .docs-nav a {
+      text-decoration: none;
+      color: var(--brand);
+      background: rgba(15, 118, 110, 0.08);
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+    .docs-section {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 20px 22px;
+      margin-bottom: 16px;
+      box-shadow: var(--shadow-sm);
+    }
+    .docs-section h2 {
+      margin: 0 0 10px;
+      font-size: 1.15rem;
+    }
+    .docs-section h3 {
+      margin: 18px 0 8px;
+      font-size: 0.95rem;
+    }
+    .docs-section p, .docs-section li { color: var(--text); line-height: 1.55; }
+    .docs-section .muted { color: var(--muted); }
+    table.docs-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+    table.docs-table th,
+    table.docs-table td {
+      text-align: left;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+    }
+    table.docs-table th { color: var(--muted); font-weight: 600; }
+    code, .code-inline {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.84em;
+      background: var(--surface-3);
+      padding: 1px 6px;
+      border-radius: 6px;
+    }
+    pre.docs-code {
+      margin: 10px 0 0;
+      padding: 14px 16px;
+      background: #0b1420;
+      color: #e2e8f0;
+      border-radius: 12px;
+      overflow: auto;
+      font-size: 0.82rem;
+      line-height: 1.45;
+    }
+    .method {
+      display: inline-block;
+      min-width: 3.2rem;
+      font-weight: 700;
+      font-size: 0.75rem;
+      color: var(--brand);
+    }
+    .badge-soon {
+      display: inline-block;
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      background: rgba(245, 158, 11, 0.15);
+      color: #b45309;
+      padding: 2px 8px;
+      border-radius: 999px;
+      margin-left: 6px;
+    }
+    .docs-footer {
+      margin-top: 24px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="docs-page">
+    <div class="docs-hero">
+      <div class="logo-mark">EB</div>
+      <div>
+        <h1>Brand API Documentation</h1>
+        <p>Machine access to your brand on <strong>brand.eazpire.com</strong> — catalog, dual-publish, team, and profile.</p>
+      </div>
+    </div>
+
+    <div class="docs-nav">
+      <a href="#auth">Authentication</a>
+      <a href="#scopes">Scopes</a>
+      <a href="#endpoints">Endpoints</a>
+      <a href="#errors">Errors</a>
+      <a href="#examples">Examples</a>
+      <a href="/settings">Portal Settings</a>
+    </div>
+
+    <section class="docs-section" id="auth">
+      <h2>Authentication</h2>
+      <p>Create an <strong>eazpire API key</strong> in the Brand Portal under <a href="/settings">Settings → eazpire API keys</a>. The full key is shown <strong>once</strong>.</p>
+      <p>Send the key on every request:</p>
+      <ul>
+        <li><code>Authorization: Bearer eaz_brand_…</code></li>
+        <li>or <code>X-Eazpire-Brand-Key: eaz_brand_…</code></li>
+      </ul>
+      <p class="muted">Portal browser sessions use a cookie instead and have full access (<code>*</code>). Keys are scoped to one brand and never store the raw secret after creation.</p>
+      <p class="muted"><strong>Not the same as:</strong> BYO Printify/Shopify connections, or “Link eazpire Account” (Customer Account OAuth for Creator design).</p>
+    </section>
+
+    <section class="docs-section" id="scopes">
+      <h2>Scopes</h2>
+      <p>When creating a key you can pick scopes, or leave defaults (all listed scopes). Use <code>*</code> for full access.</p>
+      <table class="docs-table">
+        <thead>
+          <tr><th>Scope</th><th>Allows</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>overview:read</code></td><td>Brand overview + stats</td></tr>
+          <tr><td><code>brand:read</code></td><td>Read brand profile</td></tr>
+          <tr><td><code>brand:write</code></td><td>Update name, tagline, about, handle (no delete)</td></tr>
+          <tr><td><code>connections:read</code></td><td>Connection status (no secrets)</td></tr>
+          <tr><td><code>products:read</code></td><td>List / get products</td></tr>
+          <tr><td><code>products:write</code></td><td>Update local product title/status</td></tr>
+          <tr><td><code>products:sync</code></td><td>Sync catalog from BYO Printify</td></tr>
+          <tr><td><code>products:publish</code></td><td>Publish / unpublish on eazpire</td></tr>
+          <tr><td><code>team:read</code></td><td>List team members</td></tr>
+          <tr><td><code>team:invite</code></td><td>Invite creators by email</td></tr>
+          <tr><td><code>team:write</code></td><td>Update publish_mode / revoke members</td></tr>
+          <tr><td><code>*</code></td><td>All scopes</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="docs-section" id="endpoints">
+      <h2>Endpoints</h2>
+      <p class="muted">Base URL: <code>https://brand.eazpire.com</code>. Prefer versioned paths; <code>?op=</code> aliases still work.</p>
+
+      <h3>Overview &amp; brand</h3>
+      <table class="docs-table">
+        <thead><tr><th>Method / path</th><th>Scope</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="method">GET</span> <code>/api/v1/overview</code></td>
+            <td><code>overview:read</code></td>
+            <td>Profile + product/member counts + connection summary</td>
+          </tr>
+          <tr>
+            <td><span class="method">GET</span> <code>/api/v1/brand</code></td>
+            <td><code>brand:read</code></td>
+            <td>Brand profile only</td>
+          </tr>
+          <tr>
+            <td><span class="method">POST</span> <code>/api/v1/brand</code></td>
+            <td><code>brand:write</code></td>
+            <td>Body: <code>{ name?, handle?, tagline?, about? }</code></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Connections</h3>
+      <table class="docs-table">
+        <thead><tr><th>Method / path</th><th>Scope</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="method">GET</span> <code>/api/v1/connections</code></td>
+            <td><code>connections:read</code></td>
+            <td>Status, shop ids/names — never API secrets</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Products</h3>
+      <table class="docs-table">
+        <thead><tr><th>Method / path</th><th>Scope</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="method">GET</span> <code>/api/v1/products</code></td>
+            <td><code>products:read</code></td>
+            <td>Optional <code>?status=active|draft</code></td>
+          </tr>
+          <tr>
+            <td><span class="method">GET</span> <code>/api/v1/products/{id}</code></td>
+            <td><code>products:read</code></td>
+            <td>Single catalog row</td>
+          </tr>
+          <tr>
+            <td><span class="method">POST</span> <code>/api/v1/products/{id}</code></td>
+            <td><code>products:write</code></td>
+            <td>Body: <code>{ title?, status? }</code> — local metadata only; Printify sync may overwrite</td>
+          </tr>
+          <tr>
+            <td><span class="method">POST</span> <code>/api/v1/products/sync</code></td>
+            <td><code>products:sync</code></td>
+            <td>Refresh from BYO Printify</td>
+          </tr>
+          <tr>
+            <td><span class="method">POST</span> <code>/api/v1/products/publish</code></td>
+            <td><code>products:publish</code></td>
+            <td><code>{ product_id }</code> or <code>{ product_ids }</code> or <code>{ limit }</code></td>
+          </tr>
+          <tr>
+            <td><span class="method">POST</span> <code>/api/v1/products/unpublish</code></td>
+            <td><code>products:publish</code></td>
+            <td><code>{ product_ids }</code> or <code>{ all: true }</code></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Team</h3>
+      <table class="docs-table">
+        <thead><tr><th>Method / path</th><th>Scope</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="method">GET</span> <code>/api/v1/team</code></td>
+            <td><code>team:read</code></td>
+            <td>Members (excludes owner row)</td>
+          </tr>
+          <tr>
+            <td><span class="method">POST</span> <code>/api/v1/team/invite</code></td>
+            <td><code>team:invite</code></td>
+            <td><code>{ email, publish_mode?: "review"|"auto_publish" }</code></td>
+          </tr>
+          <tr>
+            <td><span class="method">POST</span> <code>/api/v1/team/update</code></td>
+            <td><code>team:write</code></td>
+            <td><code>{ member_id, publish_mode?, status? }</code></td>
+          </tr>
+          <tr>
+            <td><span class="method">POST</span> <code>/api/v1/team/revoke</code></td>
+            <td><code>team:write</code></td>
+            <td><code>{ member_id }</code></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Coming soon</h3>
+      <p>Orders API <span class="badge-soon">soon</span> — fulfillment / order sync is not exposed yet. Webhooks registration is planned for a later release.</p>
+      <p class="muted"><code>/api/v1/memberships</code> and API key CRUD require a portal session (not API keys). Memberships need Link eazpire Account for Creator design.</p>
+    </section>
+
+    <section class="docs-section" id="errors">
+      <h2>Errors</h2>
+      <table class="docs-table">
+        <thead><tr><th>Code</th><th>HTTP</th><th>Meaning</th></tr></thead>
+        <tbody>
+          <tr><td><code>unauthorized</code></td><td>401</td><td>Missing/invalid key or session</td></tr>
+          <tr><td><code>insufficient_scope</code></td><td>403</td><td>Key lacks required scope (<code>required</code> field)</td></tr>
+          <tr><td><code>brand_suspended</code></td><td>403</td><td>Brand suspended by admin</td></tr>
+          <tr><td><code>brand_required</code></td><td>400</td><td>No brand for this auth</td></tr>
+          <tr><td><code>eazpire_account_link_required</code></td><td>403</td><td>Personal memberships / Creator ops need session + linked account</td></tr>
+          <tr><td><code>not_found</code></td><td>404</td><td>Unknown product / member</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="docs-section" id="examples">
+      <h2>Examples</h2>
+      <h3>List products</h3>
+      <pre class="docs-code">curl -sS "https://brand.eazpire.com/api/v1/products" \
+  -H "Authorization: Bearer eaz_brand_YOUR_KEY"</pre>
+
+      <h3>Update brand tagline</h3>
+      <pre class="docs-code">curl -sS -X POST "https://brand.eazpire.com/api/v1/brand" \
+  -H "Authorization: Bearer eaz_brand_YOUR_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"tagline":"Made for creators"}'</pre>
+
+      <h3>Invite a team member</h3>
+      <pre class="docs-code">curl -sS -X POST "https://brand.eazpire.com/api/v1/team/invite" \
+  -H "Authorization: Bearer eaz_brand_YOUR_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"creator@example.com","publish_mode":"review"}'</pre>
+
+      <h3>Publish to eazpire</h3>
+      <pre class="docs-code">curl -sS -X POST "https://brand.eazpire.com/api/v1/products/publish" \
+  -H "Authorization: Bearer eaz_brand_YOUR_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"product_ids":["bp_…"]}'</pre>
+    </section>
+
+    <p class="docs-footer">
+      Engineering reference: <code>docs/deployment/brand-portal.md</code> in the eazpire repo.
+      · <a href="/">Back to Brand Portal</a>
+    </p>
+  </div>
+</body>
+</html>

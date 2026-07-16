@@ -3,9 +3,7 @@
  */
 
 import { json, getCorsHeaders } from "../../utils/response.js";
-import { getBrandDb, brandDbUnavailable, newId, ensureBrandSchema } from "./db.js";
-import { requireBrandSession } from "./rbac.js";
-import { getOwnedBrand } from "./brandProfile.js";
+import { newId } from "./db.js";
 import { sendBrandInviteEmail } from "./email.js";
 import { resolveBrandAuthContext } from "./brandAuthContext.js";
 import { BRAND_API_SCOPES } from "./rbac.js";
@@ -29,17 +27,16 @@ export async function handleBrandTeamList(request, env) {
   return json({ ok: true, members: rows?.results || [] }, 200, cors);
 }
 
+/** Invite creator by email — session or API key with team:invite */
 export async function handleBrandTeamInvite(request, env) {
   const cors = getCorsHeaders(request);
   if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405, cors);
-  const session = await requireBrandSession(request, env);
-  if (!session) return json({ ok: false, error: "unauthorized" }, 401, cors);
-  const db = getBrandDb(env);
-  if (!db) return json(brandDbUnavailable(), 503, cors);
-  await ensureBrandSchema(env);
 
-  const brand = await getOwnedBrand(db, session.uid);
-  if (!brand) return json({ ok: false, error: "brand_required" }, 400, cors);
+  const resolved = await resolveBrandAuthContext(request, env, {
+    scope: BRAND_API_SCOPES.TEAM_INVITE,
+  });
+  if (resolved.error) return resolved.error;
+  const { db, brand, auth } = resolved;
 
   const body = await request.json().catch(() => ({}));
   const email = String(body.email || "")
@@ -50,7 +47,7 @@ export async function handleBrandTeamInvite(request, env) {
   if (!email || !email.includes("@")) {
     return json({ ok: false, error: "invalid_email" }, 400, cors);
   }
-  if (email === String(session.email || "").toLowerCase()) {
+  if (auth.type === "session" && auth.email && email === String(auth.email).toLowerCase()) {
     return json({ ok: false, error: "cannot_invite_self" }, 400, cors);
   }
 
@@ -61,6 +58,7 @@ export async function handleBrandTeamInvite(request, env) {
 
   const now = Date.now();
   let memberId;
+  const invitedBy = auth.uid;
 
   if (existing) {
     if (existing.role === "owner") {
@@ -81,7 +79,7 @@ export async function handleBrandTeamInvite(request, env) {
           (id, brand_id, email, user_id, role, publish_mode, status, invited_by, created_at, updated_at)
          VALUES (?, ?, ?, NULL, 'creator', ?, 'invited', ?, ?, ?)`
       )
-      .bind(memberId, brand.id, email, publishMode, session.uid, now, now)
+      .bind(memberId, brand.id, email, publishMode, invitedBy, now, now)
       .run();
   }
 
@@ -111,17 +109,16 @@ export async function handleBrandTeamInvite(request, env) {
   );
 }
 
+/** Update publish_mode / status — session or API key with team:write */
 export async function handleBrandTeamUpdate(request, env) {
   const cors = getCorsHeaders(request);
   if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405, cors);
-  const session = await requireBrandSession(request, env);
-  if (!session) return json({ ok: false, error: "unauthorized" }, 401, cors);
-  const db = getBrandDb(env);
-  if (!db) return json(brandDbUnavailable(), 503, cors);
-  await ensureBrandSchema(env);
 
-  const brand = await getOwnedBrand(db, session.uid);
-  if (!brand) return json({ ok: false, error: "brand_required" }, 400, cors);
+  const resolved = await resolveBrandAuthContext(request, env, {
+    scope: BRAND_API_SCOPES.TEAM_WRITE,
+  });
+  if (resolved.error) return resolved.error;
+  const { db, brand } = resolved;
 
   const body = await request.json().catch(() => ({}));
   const memberId = String(body.member_id || "").trim();
@@ -151,20 +148,33 @@ export async function handleBrandTeamUpdate(request, env) {
   }
 
   const updated = await db.prepare(`SELECT * FROM brand_members WHERE id = ?`).bind(memberId).first();
-  return json({ ok: true, member: updated }, 200, cors);
+  return json(
+    {
+      ok: true,
+      member: {
+        id: updated.id,
+        email: updated.email,
+        role: updated.role,
+        publish_mode: updated.publish_mode,
+        status: updated.status,
+        updated_at: updated.updated_at,
+      },
+    },
+    200,
+    cors
+  );
 }
 
+/** Revoke member — session or API key with team:write */
 export async function handleBrandTeamRevoke(request, env) {
   const cors = getCorsHeaders(request);
   if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405, cors);
-  const session = await requireBrandSession(request, env);
-  if (!session) return json({ ok: false, error: "unauthorized" }, 401, cors);
-  const db = getBrandDb(env);
-  if (!db) return json(brandDbUnavailable(), 503, cors);
-  await ensureBrandSchema(env);
 
-  const brand = await getOwnedBrand(db, session.uid);
-  if (!brand) return json({ ok: false, error: "brand_required" }, 400, cors);
+  const resolved = await resolveBrandAuthContext(request, env, {
+    scope: BRAND_API_SCOPES.TEAM_WRITE,
+  });
+  if (resolved.error) return resolved.error;
+  const { db, brand } = resolved;
 
   const body = await request.json().catch(() => ({}));
   const memberId = String(body.member_id || "").trim();
@@ -184,5 +194,19 @@ export async function handleBrandTeamRevoke(request, env) {
     .run();
 
   const updated = await db.prepare(`SELECT * FROM brand_members WHERE id = ?`).bind(memberId).first();
-  return json({ ok: true, member: updated }, 200, cors);
+  return json(
+    {
+      ok: true,
+      member: {
+        id: updated.id,
+        email: updated.email,
+        role: updated.role,
+        publish_mode: updated.publish_mode,
+        status: updated.status,
+        updated_at: updated.updated_at,
+      },
+    },
+    200,
+    cors
+  );
 }

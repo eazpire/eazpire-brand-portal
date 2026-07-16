@@ -1,5 +1,5 @@
 /**
- * Read-sync brand products from Printify
+ * Read-sync brand products from Printify + single-product get/update
  */
 
 import { json, getCorsHeaders } from "../../utils/response.js";
@@ -27,6 +27,25 @@ function extractShopifyId(product) {
   return null;
 }
 
+function mapProductRow(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    printify_product_id: row.printify_product_id,
+    shopify_product_id: row.shopify_product_id,
+    title: row.title,
+    status: row.status,
+    thumbnail_url: row.thumbnail_url,
+    last_synced_at: row.last_synced_at,
+    updated_at: row.updated_at,
+    eazpire_shopify_product_id: row.eazpire_shopify_product_id,
+    eazpire_handle: row.eazpire_handle,
+    dual_publish_status: row.dual_publish_status,
+    dual_publish_error: row.dual_publish_error,
+    dual_published_at: row.dual_published_at,
+  };
+}
+
 export async function handleBrandProductsList(request, env) {
   const resolved = await resolveBrandAuthContext(request, env, {
     scope: BRAND_API_SCOPES.PRODUCTS_READ,
@@ -50,6 +69,93 @@ export async function handleBrandProductsList(request, env) {
 
   const rows = await db.prepare(sql).bind(...binds).all();
   return json({ ok: true, products: rows?.results || [] }, 200, cors);
+}
+
+/** GET single product by id (query product_id or path rewrite) */
+export async function handleBrandProductGet(request, env) {
+  const resolved = await resolveBrandAuthContext(request, env, {
+    scope: BRAND_API_SCOPES.PRODUCTS_READ,
+    allowSuspended: true,
+  });
+  if (resolved.error) return resolved.error;
+  const { cors, db, brand } = resolved;
+
+  const url = new URL(request.url);
+  const productId = String(url.searchParams.get("product_id") || url.searchParams.get("id") || "").trim();
+  if (!productId) return json({ ok: false, error: "product_id_required" }, 400, cors);
+
+  const row = await db
+    .prepare(
+      `SELECT id, printify_product_id, shopify_product_id, title, status, thumbnail_url, last_synced_at, updated_at,
+              eazpire_shopify_product_id, eazpire_handle, dual_publish_status, dual_publish_error, dual_published_at
+       FROM brand_products WHERE brand_id = ? AND id = ? LIMIT 1`
+    )
+    .bind(brand.id, productId)
+    .first();
+
+  if (!row) return json({ ok: false, error: "not_found" }, 404, cors);
+  return json({ ok: true, product: mapProductRow(row) }, 200, cors);
+}
+
+/**
+ * Update local catalog metadata (title / status).
+ * Does not write back to Printify — re-sync may overwrite title/status from Printify.
+ */
+export async function handleBrandProductUpdate(request, env) {
+  const cors = getCorsHeaders(request);
+  if (request.method !== "POST" && request.method !== "PATCH" && request.method !== "PUT") {
+    return json({ ok: false, error: "method_not_allowed" }, 405, cors);
+  }
+
+  const resolved = await resolveBrandAuthContext(request, env, {
+    scope: BRAND_API_SCOPES.PRODUCTS_WRITE,
+  });
+  if (resolved.error) return resolved.error;
+  const { db, brand } = resolved;
+
+  const url = new URL(request.url);
+  const body = await request.json().catch(() => ({}));
+  const productId = String(
+    body.product_id || body.id || url.searchParams.get("product_id") || url.searchParams.get("id") || ""
+  ).trim();
+  if (!productId) return json({ ok: false, error: "product_id_required" }, 400, cors);
+
+  const row = await db
+    .prepare(`SELECT * FROM brand_products WHERE brand_id = ? AND id = ? LIMIT 1`)
+    .bind(brand.id, productId)
+    .first();
+  if (!row) return json({ ok: false, error: "not_found" }, 404, cors);
+
+  let title = row.title;
+  let status = row.status;
+  if (body.title != null) {
+    title = String(body.title).trim().slice(0, 200);
+    if (!title) return json({ ok: false, error: "invalid_title" }, 400, cors);
+  }
+  if (body.status != null) {
+    const s = String(body.status).trim().toLowerCase();
+    if (s !== "active" && s !== "draft") {
+      return json({ ok: false, error: "invalid_status", allowed: ["active", "draft"] }, 400, cors);
+    }
+    status = s;
+  }
+
+  const now = Date.now();
+  await db
+    .prepare(`UPDATE brand_products SET title = ?, status = ?, updated_at = ? WHERE id = ?`)
+    .bind(title, status, now, productId)
+    .run();
+
+  const updated = await db
+    .prepare(
+      `SELECT id, printify_product_id, shopify_product_id, title, status, thumbnail_url, last_synced_at, updated_at,
+              eazpire_shopify_product_id, eazpire_handle, dual_publish_status, dual_publish_error, dual_published_at
+       FROM brand_products WHERE id = ?`
+    )
+    .bind(productId)
+    .first();
+
+  return json({ ok: true, product: mapProductRow(updated) }, 200, cors);
 }
 
 export async function handleBrandProductsSync(request, env) {

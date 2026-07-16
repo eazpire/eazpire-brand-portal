@@ -85,18 +85,48 @@ export async function handleBrandCreate(request, env) {
   return json({ ok: true, brand }, 200, cors);
 }
 
+/** GET brand profile (session or API key with brand:read) */
+export async function handleBrandGet(request, env) {
+  const resolved = await resolveBrandAuthContext(request, env, {
+    scope: BRAND_API_SCOPES.BRAND_READ,
+    allowSuspended: true,
+  });
+  if (resolved.error) return resolved.error;
+  const { cors, brand, auth } = resolved;
+
+  return json(
+    {
+      ok: true,
+      brand: {
+        id: brand.id,
+        name: brand.name,
+        handle: brand.handle,
+        tagline: brand.tagline,
+        about: brand.about || null,
+        status: brand.status,
+        logo_r2_key: brand.logo_r2_key || null,
+        created_at: brand.created_at,
+        updated_at: brand.updated_at,
+      },
+      auth_type: auth.type,
+    },
+    200,
+    cors
+  );
+}
+
+/** POST update name/tagline/about/handle — no delete (session or API key with brand:write) */
 export async function handleBrandUpdate(request, env) {
   const cors = getCorsHeaders(request);
-  if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405, cors);
-  const session = await requireBrandSession(request, env);
-  if (!session) return json({ ok: false, error: "unauthorized" }, 401, cors);
+  if (request.method !== "POST" && request.method !== "PATCH" && request.method !== "PUT") {
+    return json({ ok: false, error: "method_not_allowed" }, 405, cors);
+  }
 
-  const db = getBrandDb(env);
-  if (!db) return json(brandDbUnavailable(), 503, cors);
-  await ensureBrandSchema(env);
-
-  const brand = await getOwnedBrand(db, session.uid);
-  if (!brand) return json({ ok: false, error: "brand_required" }, 400, cors);
+  const resolved = await resolveBrandAuthContext(request, env, {
+    scope: BRAND_API_SCOPES.BRAND_WRITE,
+  });
+  if (resolved.error) return resolved.error;
+  const { db, brand } = resolved;
 
   const body = await request.json().catch(() => ({}));
   const name = body.name != null ? String(body.name).trim() : brand.name;
@@ -125,7 +155,22 @@ export async function handleBrandUpdate(request, env) {
     .run();
 
   const updated = await db.prepare(`SELECT * FROM brands WHERE id = ?`).bind(brand.id).first();
-  return json({ ok: true, brand: updated }, 200, cors);
+  return json(
+    {
+      ok: true,
+      brand: {
+        id: updated.id,
+        name: updated.name,
+        handle: updated.handle,
+        tagline: updated.tagline,
+        about: updated.about || null,
+        status: updated.status,
+        updated_at: updated.updated_at,
+      },
+    },
+    200,
+    cors
+  );
 }
 
 export async function handleBrandLogoUpload(request, env) {

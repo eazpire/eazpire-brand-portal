@@ -14,6 +14,7 @@ import {
 import {
   handleBrandCreate,
   handleBrandUpdate,
+  handleBrandGet,
   handleBrandLogoUpload,
   handleBrandOverview,
 } from "./brandProfile.js";
@@ -26,7 +27,12 @@ import {
   handleBrandConnectionPing,
   handleBrandConnectionDisconnect,
 } from "./brandConnections.js";
-import { handleBrandProductsList, handleBrandProductsSync } from "./brandProducts.js";
+import {
+  handleBrandProductsList,
+  handleBrandProductsSync,
+  handleBrandProductGet,
+  handleBrandProductUpdate,
+} from "./brandProducts.js";
 import {
   handleBrandTeamList,
   handleBrandTeamInvite,
@@ -69,12 +75,15 @@ export async function handleBrandRouter(request, env) {
     if (op === "brand-auth-logout") return handleBrandAuthLogout(request, env);
     if (op === "brand-auth-me") return handleBrandAuthMe(request, env);
 
-    if (op === "brand-overview") return handleBrandOverview(request, env);
+    if (op === "brand-overview" || op === "brand-api-overview") return handleBrandOverview(request, env);
     if (op === "brand-create") return handleBrandCreate(request, env);
-    if (op === "brand-update") return handleBrandUpdate(request, env);
+    if (op === "brand-update" || op === "brand-api-brand-update") return handleBrandUpdate(request, env);
+    if (op === "brand-api-brand" || op === "brand-get") return handleBrandGet(request, env);
     if (op === "brand-logo-upload") return handleBrandLogoUpload(request, env);
 
-    if (op === "brand-connections") return handleBrandConnectionsList(request, env);
+    if (op === "brand-connections" || op === "brand-api-connections") {
+      return handleBrandConnectionsList(request, env);
+    }
     if (op === "brand-printify-connect") return handleBrandPrintifyConnect(request, env);
     if (op === "brand-shopify-connect") return handleBrandShopifyConnect(request, env);
     if (op === "brand-shopify-oauth-start") return handleBrandShopifyOAuthStart(request, env);
@@ -83,6 +92,10 @@ export async function handleBrandRouter(request, env) {
 
     // Product catalog + dual-publish onto eazpire (aliases for clear Brand API naming)
     if (op === "brand-products" || op === "brand-api-products") return handleBrandProductsList(request, env);
+    if (op === "brand-api-product-get" || op === "brand-product-get") return handleBrandProductGet(request, env);
+    if (op === "brand-api-product-update" || op === "brand-product-update") {
+      return handleBrandProductUpdate(request, env);
+    }
     if (op === "brand-products-sync" || op === "brand-api-sync") return handleBrandProductsSync(request, env);
     if (
       op === "brand-dual-publish" ||
@@ -98,7 +111,6 @@ export async function handleBrandRouter(request, env) {
     ) {
       return handleBrandDualUnpublish(request, env);
     }
-    if (op === "brand-api-overview") return handleBrandOverview(request, env);
     if (op === "brand-team" || op === "brand-api-team") return handleBrandTeamList(request, env);
 
     // API key management — portal session only (create / list / revoke)
@@ -124,9 +136,24 @@ export async function handleBrandRouter(request, env) {
       return handleBrandMyMemberships(request, env);
     }
 
-    if (op === "brand-team-invite") return handleBrandTeamInvite(request, env);
-    if (op === "brand-team-update") return handleBrandTeamUpdate(request, env);
-    if (op === "brand-team-revoke") return handleBrandTeamRevoke(request, env);
+    if (
+      op === "brand-team-invite" ||
+      op === "brand-api-team-invite"
+    ) {
+      return handleBrandTeamInvite(request, env);
+    }
+    if (
+      op === "brand-team-update" ||
+      op === "brand-api-team-update"
+    ) {
+      return handleBrandTeamUpdate(request, env);
+    }
+    if (
+      op === "brand-team-revoke" ||
+      op === "brand-api-team-revoke"
+    ) {
+      return handleBrandTeamRevoke(request, env);
+    }
     if (op === "brand-accept-invite") return handleBrandAcceptInvite(request, env);
 
     if (op === "brand-customer-unlink") return handleBrandCustomerUnlink(request, env);

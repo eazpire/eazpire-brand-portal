@@ -36,6 +36,10 @@ function assetKeyForPath(pathname) {
   let p = pathname || "/";
   if (p === "/" || p === "") return "index.html";
   if (p.startsWith("/")) p = p.slice(1);
+  // Public API docs (no login)
+  if (p === "docs" || p === "api-docs" || p === "docs.html") {
+    return "docs.html";
+  }
   // SPA routes
   const spaRoutes = ["overview", "brand", "connections", "products", "team", "orders", "settings"];
   if (spaRoutes.includes(p) || spaRoutes.some((r) => p.startsWith(r + "?"))) {

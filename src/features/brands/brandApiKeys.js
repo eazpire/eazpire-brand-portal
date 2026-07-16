@@ -5,7 +5,13 @@
 
 import { json, getCorsHeaders } from "../../utils/response.js";
 import { getBrandDb, brandDbUnavailable, newId, ensureBrandSchema } from "./db.js";
-import { requireBrandSession, hashToken, DEFAULT_BRAND_API_SCOPES, BRAND_API_KEY_PREFIX } from "./rbac.js";
+import {
+  requireBrandSession,
+  hashToken,
+  DEFAULT_BRAND_API_SCOPES,
+  ALLOWED_BRAND_API_SCOPES,
+  BRAND_API_KEY_PREFIX,
+} from "./rbac.js";
 import { getOwnedBrand } from "./brandProfile.js";
 
 function randomKeySecret(len = 32) {
@@ -19,7 +25,7 @@ function randomKeySecret(len = 32) {
 
 function normalizeScopes(input) {
   if (Array.isArray(input) && input.length) {
-    const allowed = new Set(DEFAULT_BRAND_API_SCOPES.concat(["*"]));
+    const allowed = new Set(ALLOWED_BRAND_API_SCOPES);
     const scopes = input.map((s) => String(s).trim()).filter((s) => allowed.has(s));
     return scopes.length ? scopes : [...DEFAULT_BRAND_API_SCOPES];
   }

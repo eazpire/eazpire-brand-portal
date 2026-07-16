@@ -120,24 +120,36 @@ Open signup: first magic-link request creates a `brand_users` row; onboarding cr
 
 Portal and external clients use the same handlers on `brand.eazpire.com`. Prefer versioned paths; `?op=` aliases still work.
 
+**Public docs (for brand owners / integrators):** [https://brand.eazpire.com/docs](https://brand.eazpire.com/docs) (also `/api-docs`). Linked from Settings → eazpire API keys.
+
 ### Versioned paths (`/api/v1/…`)
 
-| Path | Method | Purpose | Default scope |
-|------|--------|---------|---------------|
+| Path | Method | Purpose | Scope |
+|------|--------|---------|-------|
 | `/api/v1/overview` | GET | Brand profile + stats | `overview:read` |
+| `/api/v1/brand` | GET | Brand profile only | `brand:read` |
+| `/api/v1/brand` | POST | Update name / tagline / about / handle | `brand:write` |
+| `/api/v1/connections` | GET | Connection status (no secrets) | `connections:read` |
 | `/api/v1/products` | GET | Catalog + `dual_publish_status` | `products:read` |
+| `/api/v1/products/{id}` | GET | Single product | `products:read` |
+| `/api/v1/products/{id}` | POST | Update local title / status | `products:write` |
 | `/api/v1/products/sync` | POST | Refresh from BYO Printify | `products:sync` |
 | `/api/v1/products/publish` | POST | Publish to **eazpire** Shopify | `products:publish` |
 | `/api/v1/products/unpublish` | POST | Draft eazpire listings + mark unpublished | `products:publish` |
 | `/api/v1/team` | GET | Team members (read) | `team:read` |
+| `/api/v1/team/invite` | POST | Invite by email | `team:invite` |
+| `/api/v1/team/update` | POST | Update publish_mode / status | `team:write` |
+| `/api/v1/team/revoke` | POST | Revoke member | `team:write` |
 | `/api/v1/memberships` | GET | Personal memberships (session only) | — |
 | `/api/v1/keys` | GET | List API keys (session only) | — |
 
-Equivalent `?op=` names: `brand-api-overview`, `brand-api-products`, `brand-api-sync`, `brand-api-publish`, `brand-api-unpublish`, `brand-api-team`, `brand-api-memberships`, `brand-api-keys` / `brand-api-keys-create` / `brand-api-keys-revoke`.
+Orders API and webhook registration: **coming soon** (not implemented).
+
+Equivalent `?op=` names include `brand-api-overview`, `brand-api-brand`, `brand-api-brand-update`, `brand-api-connections`, `brand-api-products`, `brand-api-product-get`, `brand-api-product-update`, `brand-api-sync`, `brand-api-publish`, `brand-api-unpublish`, `brand-api-team`, `brand-api-team-invite`, `brand-api-team-update`, `brand-api-team-revoke`, `brand-api-memberships`, `brand-api-keys` / create / revoke.
 
 ### Scopes
 
-New keys get all default scopes: `overview:read`, `products:read`, `products:sync`, `products:publish`, `team:read`. Session auth has full access (`*`).
+New keys default to all of: `overview:read`, `brand:read`, `brand:write`, `connections:read`, `products:read`, `products:write`, `products:sync`, `products:publish`, `team:read`, `team:invite`, `team:write`. Settings UI can pick a subset or `*`. Session auth has full access (`*`).
 
 ### Example curl
 
@@ -145,6 +157,18 @@ New keys get all default scopes: `overview:read`, `products:read`, `products:syn
 # List products
 curl -sS "https://brand.eazpire.com/api/v1/products" \
   -H "Authorization: Bearer eaz_brand_YOUR_KEY"
+
+# Update brand profile
+curl -sS -X POST "https://brand.eazpire.com/api/v1/brand" \
+  -H "Authorization: Bearer eaz_brand_YOUR_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"tagline":"Made for creators"}'
+
+# Invite team member
+curl -sS -X POST "https://brand.eazpire.com/api/v1/team/invite" \
+  -H "Authorization: Bearer eaz_brand_YOUR_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"creator@example.com","publish_mode":"review"}'
 
 # Publish selected products (or omit ids + use limit for next unpublished)
 curl -sS -X POST "https://brand.eazpire.com/api/v1/products/publish" \
