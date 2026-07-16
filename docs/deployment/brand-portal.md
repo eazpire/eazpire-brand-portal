@@ -147,14 +147,16 @@ Portal and external clients use the same handlers on `brand.eazpire.com`. Prefer
 | `/api/v1/webhooks/{id}` | POST | Update url / events / status | `webhooks:write` |
 | `/api/v1/webhooks/{id}/revoke` | POST | Disable (or `{ hard: true }` delete) | `webhooks:write` |
 | `/api/v1/webhooks/{id}/test` | POST | Send `webhook.ping` | `webhooks:write` |
+| `/api/v1/orders` | GET | Orders on eazpire for dual-published brand products (read-only) | `orders:read` |
+| `/api/v1/orders/{id}` | GET | Order detail if it contains this brand’s line items | `orders:read` |
 
-Orders API: **coming soon** (not implemented).
+Orders are **platform eazpire shop** sales filtered by `brand_products.eazpire_shopify_product_id` — not the brand’s BYO Shopify orders. Suspended brands get `403 brand_suspended`. No fulfill/refund. Inbound Shopify→brand order webhooks are out of scope for MVP (poll the API).
 
-Equivalent `?op=` names include `brand-api-overview`, `brand-api-brand`, `brand-api-brand-update`, `brand-api-connections`, `brand-api-products`, `brand-api-product-get`, `brand-api-product-update`, `brand-api-sync`, `brand-api-publish`, `brand-api-unpublish`, `brand-api-team`, `brand-api-team-invite`, `brand-api-team-update`, `brand-api-team-revoke`, `brand-api-memberships`, `brand-api-keys` / create / revoke, `brand-api-webhooks` / create / update / revoke / test.
+Equivalent `?op=` names include `brand-api-overview`, `brand-api-brand`, `brand-api-brand-update`, `brand-api-connections`, `brand-api-products`, `brand-api-product-get`, `brand-api-product-update`, `brand-api-sync`, `brand-api-publish`, `brand-api-unpublish`, `brand-api-team`, `brand-api-team-invite`, `brand-api-team-update`, `brand-api-team-revoke`, `brand-api-memberships`, `brand-api-keys` / create / revoke, `brand-api-webhooks` / create / update / revoke / test, `brand-api-orders`, `brand-api-order-get`.
 
 ### Scopes
 
-New keys default to all of: `overview:read`, `brand:read`, `brand:write`, `connections:read`, `products:read`, `products:write`, `products:sync`, `products:publish`, `team:read`, `team:invite`, `team:write`, `webhooks:read`, `webhooks:write`. Settings UI can pick a subset or `*`. Session auth has full access (`*`).
+New keys default to all of: `overview:read`, `brand:read`, `brand:write`, `connections:read`, `products:read`, `products:write`, `products:sync`, `products:publish`, `team:read`, `team:invite`, `team:write`, `webhooks:read`, `webhooks:write`, `orders:read`. Settings UI can pick a subset or `*`. Session auth has full access (`*`).
 
 ### Webhooks
 
@@ -202,6 +204,14 @@ curl -sS -X POST "https://brand.eazpire.com/api/v1/webhooks" \
   -H "Authorization: Bearer eaz_brand_YOUR_KEY" \
   -H "Content-Type: application/json" \
   -d '{"url":"https://example.com/hooks/eazpire","events":["product.published","product.unpublished"]}'
+
+# List eazpire orders for dual-published products
+curl -sS "https://brand.eazpire.com/api/v1/orders?limit=25" \
+  -H "Authorization: Bearer eaz_brand_YOUR_KEY"
+
+# Order detail (404 if no brand line items)
+curl -sS "https://brand.eazpire.com/api/v1/orders/ORDER_ID" \
+  -H "Authorization: Bearer eaz_brand_YOUR_KEY"
 
 # Same via ?op=
 curl -sS "https://brand.eazpire.com/?op=brand-api-overview" \

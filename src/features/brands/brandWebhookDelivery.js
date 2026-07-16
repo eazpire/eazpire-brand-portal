@@ -254,10 +254,15 @@ async function deliverOne(env, db, webhook, event, data) {
         },
         body,
         signal: controller.signal,
-        redirect: "error",
+        redirect: "manual",
       });
       clearTimeout(timer);
       lastCode = res.status;
+      // Opaque redirects (3xx) are not followed — treat as failure
+      if (res.status >= 300 && res.status < 400) {
+        lastErr = `http_redirect_${res.status}`;
+        break;
+      }
       if (res.status >= 200 && res.status < 300) {
         await markDelivery(db, webhook.id, deliveryId, {
           status: "success",

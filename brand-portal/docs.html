@@ -162,6 +162,7 @@
           <tr><td><code>team:write</code></td><td>Update publish_mode / revoke members</td></tr>
           <tr><td><code>webhooks:read</code></td><td>List webhooks</td></tr>
           <tr><td><code>webhooks:write</code></td><td>Create / update / revoke / test webhooks</td></tr>
+          <tr><td><code>orders:read</code></td><td>List / get eazpire orders for dual-published products (read-only)</td></tr>
           <tr><td><code>*</code></td><td>All scopes</td></tr>
         </tbody>
       </table>
@@ -301,9 +302,32 @@
         </tbody>
       </table>
 
-      <h3>Coming soon</h3>
-      <p>Orders API <span class="badge-soon">soon</span> — fulfillment / order sync is not exposed yet.</p>
-      <p class="muted"><code>/api/v1/memberships</code> and API key CRUD require a portal session (not API keys). Memberships need Link eazpire Account for Creator design.</p>
+      <h3>Orders</h3>
+      <p class="muted">Orders for your products <strong>listed on eazpire</strong> (dual-published). Not orders from your own BYO Shopify shop. Read-only — no fulfill / refund. Poll this API; inbound Shopify→brand order webhooks are not offered in MVP.</p>
+      <table class="docs-table">
+        <thead><tr><th>Method / path</th><th>Scope</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><span class="method">GET</span> <code>/api/v1/orders</code></td>
+            <td><code>orders:read</code></td>
+            <td>
+              Optional <code>?limit</code> (1–50, default 25),
+              <code>?since_id</code>,
+              <code>?created_at_min</code> (ISO),
+              <code>?financial_status</code>,
+              <code>?fulfillment_status</code>,
+              <code>?status</code> (<code>any</code>|<code>open</code>|<code>closed</code>|<code>cancelled</code>).
+              Returns only orders that include your dual-published line items.
+            </td>
+          </tr>
+          <tr>
+            <td><span class="method">GET</span> <code>/api/v1/orders/{id}</code></td>
+            <td><code>orders:read</code></td>
+            <td>Detail + brand line items + customer/shipping. <code>404</code> if the order has no items for this brand.</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="muted"><code>/api/v1/memberships</code> and API key CRUD require a portal session (not API keys). Memberships need Link eazpire Account for Creator design. Suspended brands receive <code>brand_suspended</code> on orders.</p>
     </section>
 
     <section class="docs-section" id="webhooks">
@@ -372,7 +396,9 @@ function verifyEazpireSignature(rawBody, signatureHeader, secret) {
           <tr><td><code>brand_suspended</code></td><td>403</td><td>Brand suspended by admin</td></tr>
           <tr><td><code>brand_required</code></td><td>400</td><td>No brand for this auth</td></tr>
           <tr><td><code>eazpire_account_link_required</code></td><td>403</td><td>Personal memberships / Creator ops need session + linked account</td></tr>
-          <tr><td><code>not_found</code></td><td>404</td><td>Unknown product / member</td></tr>
+          <tr><td><code>not_found</code></td><td>404</td><td>Unknown product / member / order (or order has no brand line items)</td></tr>
+          <tr><td><code>shopify_access_token_missing</code></td><td>503</td><td>Platform Shopify token not configured on brand worker</td></tr>
+          <tr><td><code>shopify_orders_fetch_failed</code></td><td>502</td><td>Shopify Admin API error while loading orders</td></tr>
         </tbody>
       </table>
     </section>
@@ -406,6 +432,14 @@ function verifyEazpireSignature(rawBody, signatureHeader, secret) {
   -H "Authorization: Bearer eaz_brand_YOUR_KEY" \
   -H "Content-Type: application/json" \
   -d '{"url":"https://example.com/hooks/eazpire","events":["product.published","product.unpublished"]}'</pre>
+
+      <h3>List eazpire orders (dual-published products)</h3>
+      <pre class="docs-code">curl -sS "https://brand.eazpire.com/api/v1/orders?limit=25" \
+  -H "Authorization: Bearer eaz_brand_YOUR_KEY"</pre>
+
+      <h3>Get one order</h3>
+      <pre class="docs-code">curl -sS "https://brand.eazpire.com/api/v1/orders/ORDER_ID" \
+  -H "Authorization: Bearer eaz_brand_YOUR_KEY"</pre>
     </section>
 
     <p class="docs-footer">

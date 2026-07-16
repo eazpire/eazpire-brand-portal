@@ -177,15 +177,17 @@ function parseListParams(url) {
   return { limit, sinceId, createdAtMin, financialStatus, fulfillmentStatus, status };
 }
 
-function buildOrdersQuery(params, pageSinceId) {
+function buildOrdersQuery(params, { createdAtMax = "" } = {}) {
   const q = new URLSearchParams();
   q.set("status", params.status || "any");
   q.set("limit", String(SHOPIFY_PAGE_SIZE));
+  q.set("order", "created_at desc");
   if (params.createdAtMin) q.set("created_at_min", params.createdAtMin);
+  if (createdAtMax) q.set("created_at_max", createdAtMax);
   if (params.financialStatus) q.set("financial_status", params.financialStatus);
   if (params.fulfillmentStatus) q.set("fulfillment_status", params.fulfillmentStatus);
-  const since = pageSinceId || params.sinceId;
-  if (since) q.set("since_id", since);
+  // User-facing since_id only on the first page (Shopify: id > since_id)
+  if (params.sinceId && !createdAtMax) q.set("since_id", params.sinceId);
   return q.toString();
 }
 
@@ -225,13 +227,14 @@ export async function handleBrandOrdersList(request, env) {
   }
 
   const matched = [];
-  let pageSinceId = "";
+  const seenIds = new Set();
+  let createdAtMax = "";
   let hasMoreShopify = false;
   let scannedPages = 0;
 
   try {
     for (let page = 0; page < MAX_SHOPIFY_PAGES && matched.length < params.limit; page++) {
-      const qs = buildOrdersQuery(params, pageSinceId);
+      const qs = buildOrdersQuery(params, { createdAtMax });
       const data = await shopifyAPI(env, shopDomain(env), `orders.json?${qs}`, { method: "GET" });
       const batch = data?.orders || [];
       scannedPages += 1;
@@ -241,15 +244,27 @@ export async function handleBrandOrdersList(request, env) {
         break;
       }
 
+      let newInBatch = 0;
       for (const order of batch) {
+        const oid = String(order.id);
+        if (seenIds.has(oid)) continue;
+        seenIds.add(oid);
+        newInBatch += 1;
+
         const brandItems = filterBrandLineItems(order.line_items, productIndex);
         if (!brandItems.length) continue;
         matched.push(mapOrderPublic(order, brandItems, { detail: false }));
         if (matched.length >= params.limit) break;
       }
 
-      const lastId = batch[batch.length - 1]?.id;
-      pageSinceId = lastId != null ? String(lastId) : "";
+      const oldest = batch[batch.length - 1];
+      const nextMax = oldest?.created_at || "";
+      // Stop if no progress (same created_at_max) or short page
+      if (!nextMax || nextMax === createdAtMax || newInBatch === 0) {
+        hasMoreShopify = false;
+        break;
+      }
+      createdAtMax = nextMax;
       hasMoreShopify = batch.length >= SHOPIFY_PAGE_SIZE;
       if (!hasMoreShopify) break;
     }

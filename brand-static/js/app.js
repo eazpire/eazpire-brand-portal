@@ -37,9 +37,37 @@ function slugify(name) {
 
 function statusBadge(status) {
   const s = String(status || "").toLowerCase();
-  if (s === "connected" || s === "active" || s === "ok") return "badge-success";
-  if (s === "invited" || s === "draft" || s === "error") return "badge-warning";
-  if (s === "revoked" || s === "disconnected") return "badge-danger";
+  if (
+    s === "connected" ||
+    s === "active" ||
+    s === "ok" ||
+    s === "paid" ||
+    s === "fulfilled" ||
+    s === "shipped"
+  ) {
+    return "badge-success";
+  }
+  if (
+    s === "invited" ||
+    s === "draft" ||
+    s === "error" ||
+    s === "pending" ||
+    s === "partial" ||
+    s === "partially_fulfilled" ||
+    s === "authorized"
+  ) {
+    return "badge-warning";
+  }
+  if (
+    s === "revoked" ||
+    s === "disconnected" ||
+    s === "cancelled" ||
+    s === "canceled" ||
+    s === "refunded" ||
+    s === "voided"
+  ) {
+    return "badge-danger";
+  }
   return "";
 }
 
@@ -573,13 +601,17 @@ async function loadOrders(root) {
       </div>`;
 
     $("btn-orders-refresh")?.addEventListener("click", () => loadOrders(root));
-    root.querySelectorAll(".btn-order-detail, tr.order-row").forEach((el) => {
-      el.addEventListener("click", (ev) => {
-        const btn = ev.target.closest("[data-order-id]");
-        const id = btn?.getAttribute("data-order-id");
-        if (!id) return;
-        ev.preventDefault();
-        openOrderDetail(root, id);
+    root.querySelectorAll(".btn-order-detail").forEach((btn) => {
+      btn.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        const id = btn.getAttribute("data-order-id");
+        if (id) openOrderDetail(root, id);
+      });
+    });
+    root.querySelectorAll("tr.order-row").forEach((row) => {
+      row.addEventListener("click", () => {
+        const id = row.getAttribute("data-order-id");
+        if (id) openOrderDetail(root, id);
       });
     });
   } catch (e) {
