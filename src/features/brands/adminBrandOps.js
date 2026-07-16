@@ -189,6 +189,14 @@ export async function handleAdminBrandGet(request, env) {
     .bind(brand.id)
     .all();
 
+  let api_keys_count = 0;
+  try {
+    const { countActiveBrandApiKeys } = await import("./brandApiKeys.js");
+    api_keys_count = await countActiveBrandApiKeys(db, brand.id);
+  } catch {
+    api_keys_count = 0;
+  }
+
   const base = publicBase(env);
   return json(
     {
@@ -209,6 +217,7 @@ export async function handleAdminBrandGet(request, env) {
         suspended_by: brand.suspended_by || null,
         created_at: brand.created_at,
         updated_at: brand.updated_at,
+        api_keys_count,
       },
       connections,
       products: products?.results || [],

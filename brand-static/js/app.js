@@ -522,7 +522,7 @@ function renderSettings() {
     </div>
     <div class="panel">
       <h2>Link eazpire Account</h2>
-      <p class="muted">Connect your eazpire shop login so Creator can use brand workspaces. This is not your brand Shopify shop (see Connections).</p>
+      <p class="muted">Connect your eazpire shop login so Creator can use brand workspaces. This is not your brand Shopify shop (see Connections), and not an API key.</p>
       ${
         linkedId
           ? `<p>Linked eazpire account ID: <code>${escapeHtml(linkedId)}</code>${
@@ -536,6 +536,16 @@ function renderSettings() {
                <a class="btn btn-primary" href="/auth/customer/start">Link eazpire Account</a>
              </div>`
       }
+    </div>
+    <div class="panel">
+      <h2>eazpire API keys</h2>
+      <p class="muted">Machine access to the Brand API (catalog, sync, dual-publish). Keys are hashed at rest; the full key is shown <strong>once</strong> when created. This is not Shopify and not Link eazpire Account.</p>
+      <div class="actions-row" style="margin-bottom:12px">
+        <input type="text" id="api-key-name" placeholder="Key name (e.g. Production)" style="min-width:200px;flex:1" />
+        <button class="btn btn-primary" id="btn-create-api-key">Create API key</button>
+      </div>
+      <div id="api-key-once" hidden class="panel" style="background:rgba(0,0,0,.04);margin-bottom:12px"></div>
+      <div id="api-keys-list" class="muted">Loading keys…</div>
     </div>
     <div class="panel">
       <h2>Creator invites</h2>
@@ -570,7 +580,9 @@ function renderSettings() {
       showToast(err.message, { error: true });
     }
   });
+  $("btn-create-api-key")?.addEventListener("click", () => createApiKey());
   loadMemberships();
+  loadApiKeys();
 
   const params = new URLSearchParams(location.search);
   if (params.get("customer_linked") === "1") {
@@ -580,6 +592,85 @@ function renderSettings() {
   if (params.get("customer_link_error")) {
     showToast(`Link failed: ${params.get("customer_link_error")}`, { error: true });
     history.replaceState({}, "", "/settings");
+  }
+}
+
+async function loadApiKeys() {
+  const box = $("api-keys-list");
+  if (!box) return;
+  try {
+    const data = await brandFetch("brand-api-keys");
+    const keys = data.keys || [];
+    if (!keys.length) {
+      box.textContent = "No API keys yet.";
+      return;
+    }
+    box.innerHTML = `<div class="table-wrap"><table class="data">
+      <thead><tr><th>Name</th><th>Prefix</th><th>Created</th><th>Last used</th><th>Status</th><th></th></tr></thead>
+      <tbody>${keys
+        .map(
+          (k) => `<tr>
+        <td>${escapeHtml(k.name)}</td>
+        <td><code>${escapeHtml(k.key_prefix)}…</code></td>
+        <td>${k.created_at ? escapeHtml(new Date(k.created_at).toLocaleString()) : "—"}</td>
+        <td>${k.last_used_at ? escapeHtml(new Date(k.last_used_at).toLocaleString()) : "—"}</td>
+        <td><span class="badge ${k.active ? "badge-success" : "badge-danger"}">${k.active ? "active" : "revoked"}</span></td>
+        <td>${
+          k.active
+            ? `<button type="button" class="btn btn-secondary btn-revoke-key" data-id="${escapeHtml(k.id)}">Revoke</button>`
+            : ""
+        }</td>
+      </tr>`
+        )
+        .join("")}</tbody></table></div>`;
+    box.querySelectorAll(".btn-revoke-key").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        if (!confirm("Revoke this API key? External systems using it will stop working.")) return;
+        try {
+          await brandFetch("brand-api-keys-revoke", { method: "POST", body: { key_id: btn.getAttribute("data-id") } });
+          showToast("API key revoked");
+          const once = $("api-key-once");
+          if (once) once.hidden = true;
+          loadApiKeys();
+        } catch (err) {
+          showToast(err.message, { error: true });
+        }
+      });
+    });
+  } catch (e) {
+    box.textContent = e.message;
+  }
+}
+
+async function createApiKey() {
+  const name = String($("api-key-name")?.value || "").trim();
+  if (!name) {
+    showToast("Enter a key name", { error: true });
+    return;
+  }
+  try {
+    const res = await brandFetch("brand-api-keys-create", { method: "POST", body: { name } });
+    const once = $("api-key-once");
+    if (once && res.api_key) {
+      once.hidden = false;
+      once.innerHTML = `
+        <p><strong>Copy this key now</strong> — it will not be shown again.</p>
+        <p><code id="api-key-raw" style="word-break:break-all">${escapeHtml(res.api_key)}</code></p>
+        <button type="button" class="btn btn-secondary" id="btn-copy-api-key">Copy to clipboard</button>`;
+      $("btn-copy-api-key")?.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(res.api_key);
+          showToast("Copied");
+        } catch {
+          showToast("Copy failed — select the key manually", { error: true });
+        }
+      });
+    }
+    if ($("api-key-name")) $("api-key-name").value = "";
+    showToast("API key created");
+    loadApiKeys();
+  } catch (err) {
+    showToast(err.message, { error: true });
   }
 }
 

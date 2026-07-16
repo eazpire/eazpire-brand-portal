@@ -4,10 +4,9 @@
  */
 
 import { json, getCorsHeaders } from "../../utils/response.js";
-import { getBrandDb, brandDbUnavailable, ensureBrandSchema } from "./db.js";
-import { requireBrandSession } from "./rbac.js";
-import { getOwnedBrand } from "./brandProfile.js";
 import { shopifyAPI } from "../../utils/shopify.js";
+import { resolveBrandAuthContext } from "./brandAuthContext.js";
+import { BRAND_API_SCOPES } from "./rbac.js";
 
 function shopDomain(env) {
   return String(env.SHOPIFY_SHOP || "allyoucanpink.myshopify.com")
@@ -312,30 +311,16 @@ export async function unpublishBrandProductsFromEazpire(env, db, brand, opts = {
   };
 }
 
-async function resolveSessionBrand(request, env) {
-  const cors = getCorsHeaders(request);
-  const session = await requireBrandSession(request, env);
-  if (!session) return { error: json({ ok: false, error: "unauthorized" }, 401, cors) };
-
-  const db = getBrandDb(env);
-  if (!db) return { error: json(brandDbUnavailable(), 503, cors) };
-  await ensureBrandSchema(env);
-
-  const brand = await getOwnedBrand(db, session.uid);
-  if (!brand) return { error: json({ ok: false, error: "brand_required" }, 400, cors) };
-  if (brand.status === "suspended") {
-    return { error: json({ ok: false, error: "brand_suspended" }, 403, cors) };
-  }
-
-  return { cors, db, brand };
-}
-
-/** POST ?op=brand-dual-publish | brand-products-publish | brand-api-publish */
+/** POST ?op=brand-dual-publish | brand-products-publish | brand-api-publish
+ * Dual-publish allowed with valid Brand API key (brand-scoped) OR portal session.
+ * Link eazpire Account is NOT required for catalog dual-publish — only for Creator design workspace. */
 export async function handleBrandDualPublish(request, env) {
   const cors = getCorsHeaders(request);
   if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405, cors);
 
-  const resolved = await resolveSessionBrand(request, env);
+  const resolved = await resolveBrandAuthContext(request, env, {
+    scope: BRAND_API_SCOPES.PRODUCTS_PUBLISH,
+  });
   if (resolved.error) return resolved.error;
   const { db, brand } = resolved;
 
@@ -357,7 +342,9 @@ export async function handleBrandDualUnpublish(request, env) {
   const cors = getCorsHeaders(request);
   if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405, cors);
 
-  const resolved = await resolveSessionBrand(request, env);
+  const resolved = await resolveBrandAuthContext(request, env, {
+    scope: BRAND_API_SCOPES.PRODUCTS_PUBLISH,
+  });
   if (resolved.error) return resolved.error;
   const { db, brand } = resolved;
 

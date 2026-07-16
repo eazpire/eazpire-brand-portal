@@ -3,10 +3,10 @@
  */
 
 import { json, getCorsHeaders } from "../../utils/response.js";
-import { getBrandDb, brandDbUnavailable, newId, ensureBrandSchema } from "./db.js";
-import { requireBrandSession } from "./rbac.js";
-import { getOwnedBrand } from "./brandProfile.js";
+import { newId } from "./db.js";
 import { getBrandPrintifyCredentials } from "./brandConnections.js";
+import { resolveBrandAuthContext } from "./brandAuthContext.js";
+import { BRAND_API_SCOPES } from "./rbac.js";
 
 async function printifyGet(token, path) {
   const res = await fetch(`https://api.printify.com/v1${path}`, {
@@ -28,15 +28,12 @@ function extractShopifyId(product) {
 }
 
 export async function handleBrandProductsList(request, env) {
-  const cors = getCorsHeaders(request);
-  const session = await requireBrandSession(request, env);
-  if (!session) return json({ ok: false, error: "unauthorized" }, 401, cors);
-  const db = getBrandDb(env);
-  if (!db) return json(brandDbUnavailable(), 503, cors);
-  await ensureBrandSchema(env);
-
-  const brand = await getOwnedBrand(db, session.uid);
-  if (!brand) return json({ ok: false, error: "brand_required" }, 400, cors);
+  const resolved = await resolveBrandAuthContext(request, env, {
+    scope: BRAND_API_SCOPES.PRODUCTS_READ,
+    allowSuspended: true,
+  });
+  if (resolved.error) return resolved.error;
+  const { cors, db, brand } = resolved;
 
   const url = new URL(request.url);
   const statusFilter = String(url.searchParams.get("status") || "").trim().toLowerCase();
@@ -58,14 +55,12 @@ export async function handleBrandProductsList(request, env) {
 export async function handleBrandProductsSync(request, env) {
   const cors = getCorsHeaders(request);
   if (request.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405, cors);
-  const session = await requireBrandSession(request, env);
-  if (!session) return json({ ok: false, error: "unauthorized" }, 401, cors);
-  const db = getBrandDb(env);
-  if (!db) return json(brandDbUnavailable(), 503, cors);
-  await ensureBrandSchema(env);
 
-  const brand = await getOwnedBrand(db, session.uid);
-  if (!brand) return json({ ok: false, error: "brand_required" }, 400, cors);
+  const resolved = await resolveBrandAuthContext(request, env, {
+    scope: BRAND_API_SCOPES.PRODUCTS_SYNC,
+  });
+  if (resolved.error) return resolved.error;
+  const { db, brand } = resolved;
 
   const creds = await getBrandPrintifyCredentials(env, brand.id);
   if (!creds?.api_token || !creds.shop_id) {

@@ -99,19 +99,63 @@ Magic link via Resend (`brand-auth-request` → `/auth/verify` → cookie `brand
 
 Open signup: first magic-link request creates a `brand_users` row; onboarding creates the brand.
 
-**Link eazpire Account** (Settings): Customer Account OAuth (`/auth/customer/start` → callback) stores `shopify_customer_id` on `brand_users` for Creator brand workspaces. This is **not** the BYO Shopify shop under Connections.
+### Three distinct auth concepts (do not conflate)
+
+| Concept | What it is | Where |
+|---------|------------|--------|
+| **BYO Printify / Shopify** | Brand’s own print shop credentials | Connections |
+| **Link eazpire Account** | eazpire shopper/customer identity for Creator design access | Settings → Customer Account OAuth |
+| **eazpire API keys** | Machine access to Brand API (`eaz_brand_…`) | Settings → eazpire API keys |
+
+**Link eazpire Account** (Settings): Customer Account OAuth (`/auth/customer/start` → callback) stores `shopify_customer_id` on `brand_users` so Creator brand workspaces work. Required before creators can put designs on that brand’s products. This is **not** the BYO Shopify shop under Connections and **not** an API key.
+
+**eazpire API keys** (Settings): Create / list / revoke. Raw key is shown **once** on create (SHA-256 hash stored). Use `Authorization: Bearer eaz_brand_…` or header `X-Eazpire-Brand-Key`. Portal UI keeps using the session cookie; the same handlers accept either.
+
+### Dual-publish vs Link eazpire Account
+
+- **Catalog dual-publish / unpublish / sync / overview / team read** — allowed with a valid Brand API key (scoped to `brand_id`) **or** portal session. Linked eazpire Account is **not** required for these.
+- **Creator design / memberships / workspace** — require linked customer identity (portal session + Link eazpire Account). API key calls to `brand-api-memberships` return `eazpire_account_link_required`.
 
 ## Brand API (dual-publish onto eazpire)
 
-Portal and external clients use the same `?op=` endpoints on `brand.eazpire.com` (session cookie). Aliases prefer clear names:
+Portal and external clients use the same handlers on `brand.eazpire.com`. Prefer versioned paths; `?op=` aliases still work.
 
-| Op | Method | Purpose |
-|----|--------|---------|
-| `brand-api-overview` / `brand-overview` | GET | Brand summary |
-| `brand-api-products` / `brand-products` | GET | Catalog + `dual_publish_status` |
-| `brand-products-sync` | POST | Refresh from BYO Printify |
-| `brand-api-publish` / `brand-products-publish` / `brand-dual-publish` | POST | Publish selected/unpublished products to **eazpire** Shopify |
-| `brand-api-unpublish` / `brand-products-unpublish` / `brand-dual-unpublish` | POST | Draft eazpire listings + mark unpublished |
+### Versioned paths (`/api/v1/…`)
+
+| Path | Method | Purpose | Default scope |
+|------|--------|---------|---------------|
+| `/api/v1/overview` | GET | Brand profile + stats | `overview:read` |
+| `/api/v1/products` | GET | Catalog + `dual_publish_status` | `products:read` |
+| `/api/v1/products/sync` | POST | Refresh from BYO Printify | `products:sync` |
+| `/api/v1/products/publish` | POST | Publish to **eazpire** Shopify | `products:publish` |
+| `/api/v1/products/unpublish` | POST | Draft eazpire listings + mark unpublished | `products:publish` |
+| `/api/v1/team` | GET | Team members (read) | `team:read` |
+| `/api/v1/memberships` | GET | Personal memberships (session only) | — |
+| `/api/v1/keys` | GET | List API keys (session only) | — |
+
+Equivalent `?op=` names: `brand-api-overview`, `brand-api-products`, `brand-api-sync`, `brand-api-publish`, `brand-api-unpublish`, `brand-api-team`, `brand-api-memberships`, `brand-api-keys` / `brand-api-keys-create` / `brand-api-keys-revoke`.
+
+### Scopes
+
+New keys get all default scopes: `overview:read`, `products:read`, `products:sync`, `products:publish`, `team:read`. Session auth has full access (`*`).
+
+### Example curl
+
+```bash
+# List products
+curl -sS "https://brand.eazpire.com/api/v1/products" \
+  -H "Authorization: Bearer eaz_brand_YOUR_KEY"
+
+# Publish selected products (or omit ids + use limit for next unpublished)
+curl -sS -X POST "https://brand.eazpire.com/api/v1/products/publish" \
+  -H "Authorization: Bearer eaz_brand_YOUR_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"product_ids":["bp_…"]}'
+
+# Same via ?op=
+curl -sS "https://brand.eazpire.com/?op=brand-api-overview" \
+  -H "X-Eazpire-Brand-Key: eaz_brand_YOUR_KEY"
+```
 
 Publish body: `{ product_id }` or `{ product_ids: [] }` or `{ limit: 20 }` (next unpublished).  
 Unpublish body: `{ product_ids: [] }` or `{ all: true }`.
@@ -128,13 +172,15 @@ Also set vars `SHOPIFY_SHOP` / `SHOPIFY_SHOP_ID` (already in `wrangler-brand.tom
 
 Tags / metafields on eazpire listings: `eaz-brand:{handle}`, `custom.brand_handle`, `custom.brand_name` (not `custom.brand`).
 
-Suspended brands (`status = suspended`) cannot publish/unpublish via the portal API.
+Suspended brands (`status = suspended`) cannot publish/unpublish/sync via the Brand API.
+
+Migration: `migrations-brand/0004_brand_api_keys.sql` (+ `ensureBrandSchema`).
 
 ## Admin Brands (`admin.eazpire.com/brands`)
 
 Partner-portals worker binds the same `BRAND_DB` and exposes:
 
-- `admin-brand-list` / `admin-brand-get`
+- `admin-brand-list` / `admin-brand-get` (includes `api_keys_count` — no secret values)
 - `admin-brand-suspend` / `admin-brand-activate`
 - `admin-brand-force-unpublish` (drafts eazpire listings; needs `SHOPIFY_ACCESS_TOKEN` on partner worker)
 
@@ -148,6 +194,6 @@ Connection health is returned **without secrets**. App drawer: Partner · Creati
 ## Related code
 
 - `src/brand-worker.js`
-- `src/features/brands/` (incl. `brandDualPublish.js`, `adminBrandOps.js`)
+- `src/features/brands/` (incl. `brandDualPublish.js`, `brandApiKeys.js`, `brandAuthContext.js`, `adminBrandOps.js`)
 - `admin-brands-portal/`
 - `docs/project/development-backlog/infrastructure/IDEA-029-brand-portal.md`

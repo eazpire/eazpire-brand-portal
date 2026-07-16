@@ -4,7 +4,8 @@
 
 import { json, getCorsHeaders } from "../../utils/response.js";
 import { getBrandDb, brandDbUnavailable, newId, ensureBrandSchema } from "./db.js";
-import { requireBrandSession } from "./rbac.js";
+import { requireBrandSession, BRAND_API_SCOPES } from "./rbac.js";
+import { resolveBrandAuthContext } from "./brandAuthContext.js";
 
 const HANDLE_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -169,16 +170,19 @@ export async function handleBrandLogoUpload(request, env) {
 }
 
 export async function handleBrandOverview(request, env) {
-  const cors = getCorsHeaders(request);
-  const session = await requireBrandSession(request, env);
-  if (!session) return json({ ok: false, error: "unauthorized" }, 401, cors);
+  const resolved = await resolveBrandAuthContext(request, env, {
+    scope: BRAND_API_SCOPES.OVERVIEW_READ,
+    allowMissingBrand: true,
+    allowSuspended: true,
+  });
+  if (resolved.error) return resolved.error;
+  const { cors, db, brand, auth } = resolved;
 
-  const db = getBrandDb(env);
-  if (!db) return json(brandDbUnavailable(), 503, cors);
-  await ensureBrandSchema(env);
-
-  const brand = await getOwnedBrand(db, session.uid);
   if (!brand) {
+    // Portal session without a brand yet — API keys are always brand-scoped
+    if (auth.type === "api_key") {
+      return json({ ok: false, error: "brand_required" }, 400, cors);
+    }
     return json({ ok: true, needs_onboarding: true, stats: null }, 200, cors);
   }
 
@@ -214,6 +218,8 @@ export async function handleBrandOverview(request, env) {
         name: brand.name,
         handle: brand.handle,
         tagline: brand.tagline,
+        status: brand.status,
+        about: brand.about || null,
       },
       stats: {
         products: Number(productCount?.c || 0),
@@ -221,6 +227,7 @@ export async function handleBrandOverview(request, env) {
         pending_reviews: 0,
         connections: byType,
       },
+      auth_type: auth.type,
     },
     200,
     cors

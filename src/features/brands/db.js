@@ -115,6 +115,20 @@ export async function ensureBrandSchema(env) {
     `ALTER TABLE brands ADD COLUMN suspended_at INTEGER`,
     `ALTER TABLE brands ADD COLUMN suspended_by TEXT`,
     `CREATE INDEX IF NOT EXISTS idx_brands_status ON brands(status)`,
+    // Brand API keys (hashed at rest; plaintext shown once on create)
+    `CREATE TABLE IF NOT EXISTS brand_api_keys (
+      id TEXT PRIMARY KEY,
+      brand_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      key_prefix TEXT NOT NULL,
+      key_hash TEXT NOT NULL,
+      scopes TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      revoked_at INTEGER,
+      last_used_at INTEGER
+    )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_brand_api_keys_hash ON brand_api_keys(key_hash)`,
+    `CREATE INDEX IF NOT EXISTS idx_brand_api_keys_brand ON brand_api_keys(brand_id)`,
   ];
 
   for (const sql of stmts) {

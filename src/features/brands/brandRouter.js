@@ -44,6 +44,12 @@ import {
   handleBrandMyMemberships,
   handleBrandAcceptInvite,
 } from "./creatorBrandWorkspace.js";
+import {
+  handleBrandApiKeysList,
+  handleBrandApiKeysCreate,
+  handleBrandApiKeysRevoke,
+} from "./brandApiKeys.js";
+import { requireBrandAuth } from "./rbac.js";
 
 export async function handleBrandRouter(request, env) {
   const url = new URL(request.url);
@@ -77,7 +83,7 @@ export async function handleBrandRouter(request, env) {
 
     // Product catalog + dual-publish onto eazpire (aliases for clear Brand API naming)
     if (op === "brand-products" || op === "brand-api-products") return handleBrandProductsList(request, env);
-    if (op === "brand-products-sync") return handleBrandProductsSync(request, env);
+    if (op === "brand-products-sync" || op === "brand-api-sync") return handleBrandProductsSync(request, env);
     if (
       op === "brand-dual-publish" ||
       op === "brand-products-publish" ||
@@ -93,12 +99,34 @@ export async function handleBrandRouter(request, env) {
       return handleBrandDualUnpublish(request, env);
     }
     if (op === "brand-api-overview") return handleBrandOverview(request, env);
+    if (op === "brand-team" || op === "brand-api-team") return handleBrandTeamList(request, env);
 
-    if (op === "brand-team") return handleBrandTeamList(request, env);
+    // API key management — portal session only (create / list / revoke)
+    if (op === "brand-api-keys" || op === "brand-api-keys-list") return handleBrandApiKeysList(request, env);
+    if (op === "brand-api-keys-create") return handleBrandApiKeysCreate(request, env);
+    if (op === "brand-api-keys-revoke") return handleBrandApiKeysRevoke(request, env);
+
+    // Memberships for the signed-in user (Creator invites) — session only; not Brand API key
+    if (op === "brand-my-memberships" || op === "brand-api-memberships") {
+      const auth = await requireBrandAuth(request, env);
+      if (auth?.type === "api_key") {
+        return json(
+          {
+            ok: false,
+            error: "eazpire_account_link_required",
+            message:
+              "Memberships are personal to a portal session / linked eazpire Account. Use a session cookie, or Link eazpire Account for Creator design workspace ops.",
+          },
+          403,
+          cors
+        );
+      }
+      return handleBrandMyMemberships(request, env);
+    }
+
     if (op === "brand-team-invite") return handleBrandTeamInvite(request, env);
     if (op === "brand-team-update") return handleBrandTeamUpdate(request, env);
     if (op === "brand-team-revoke") return handleBrandTeamRevoke(request, env);
-    if (op === "brand-my-memberships") return handleBrandMyMemberships(request, env);
     if (op === "brand-accept-invite") return handleBrandAcceptInvite(request, env);
 
     if (op === "brand-customer-unlink") return handleBrandCustomerUnlink(request, env);

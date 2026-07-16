@@ -7,17 +7,16 @@ import { getBrandDb, brandDbUnavailable, newId, ensureBrandSchema } from "./db.j
 import { requireBrandSession } from "./rbac.js";
 import { getOwnedBrand } from "./brandProfile.js";
 import { sendBrandInviteEmail } from "./email.js";
+import { resolveBrandAuthContext } from "./brandAuthContext.js";
+import { BRAND_API_SCOPES } from "./rbac.js";
 
 export async function handleBrandTeamList(request, env) {
-  const cors = getCorsHeaders(request);
-  const session = await requireBrandSession(request, env);
-  if (!session) return json({ ok: false, error: "unauthorized" }, 401, cors);
-  const db = getBrandDb(env);
-  if (!db) return json(brandDbUnavailable(), 503, cors);
-  await ensureBrandSchema(env);
-
-  const brand = await getOwnedBrand(db, session.uid);
-  if (!brand) return json({ ok: false, error: "brand_required" }, 400, cors);
+  const resolved = await resolveBrandAuthContext(request, env, {
+    scope: BRAND_API_SCOPES.TEAM_READ,
+    allowSuspended: true,
+  });
+  if (resolved.error) return resolved.error;
+  const { cors, db, brand } = resolved;
 
   const rows = await db
     .prepare(

@@ -7,6 +7,7 @@
 import { json, getCorsHeaders } from "./utils/response.js";
 import { handleBrandRouter } from "./features/brands/brandRouter.js";
 import { handleBrandPortalRequest } from "./features/brands/brandPortalHost.js";
+import { rewriteBrandApiV1Request } from "./features/brands/brandApiV1.js";
 
 export default {
   async fetch(request, env, ctx) {
@@ -15,7 +16,8 @@ export default {
       return new Response(null, { status: 204, headers: cors });
     }
 
-    const apiResp = await handleBrandRouter(request, env);
+    const apiRequest = rewriteBrandApiV1Request(request) || request;
+    const apiResp = await handleBrandRouter(apiRequest, env);
     if (apiResp) return apiResp;
 
     const portalResp = await handleBrandPortalRequest(request, env);
